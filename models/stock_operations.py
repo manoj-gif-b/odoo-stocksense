@@ -19,9 +19,18 @@ a live compute field (always accurate on read), so ``button_confirm``,
 
 Compatibility
 -------------
-Written against Odoo 17.0: uses ``stock.move.quantity`` (renamed from
-``quantity_done`` in 17.0), ``stock.picking.picking_type_id.code``,
-``scheduled_date`` / ``date_done`` and the ``_read_group`` ORM API.
+Odoo 16.0 and 17.0 (Community). The two version specific points are resolved
+at runtime instead of being hard coded:
+
+* the processed quantity of a move is read through
+  :func:`get_done_quantity_field` (``quantity_done`` on 16.0, ``quantity``
+  on 17.0) and exposed to the views as ``operation_done_qty``;
+* ``_read_group`` (17.0) and ``read_group`` (16.0) do not share the same
+  signature, so the dashboard summary counts the records one status at a
+  time.
+
+Everything else (``picking_type_id.code``, ``scheduled_date``, ``date_done``,
+stored computed fields, ``parent_of`` domains) is common to both versions.
 
 Internal transfers
 ------------------
@@ -104,6 +113,25 @@ LOCATION_USAGE_LABELS = {
 }
 
 
+def get_done_quantity_field(model, candidates=('quantity', 'quantity_done')):
+    """Name of the field holding the processed quantity of ``model``.
+
+    That field has been renamed in Odoo 17.0: ``stock.move.quantity_done``
+    became ``quantity`` and ``stock.move.line.qty_done`` became ``quantity``.
+    Resolving the name at runtime keeps the module installable on 16.0 and
+    17.0, whereas an ``@api.depends`` on a renamed field would break one of
+    the two versions.
+
+    :param model: a model or a recordset, e.g. ``self.env['stock.move']``.
+    :param candidates: field names to try, most recent version first.
+    :return: the first candidate that exists on the model.
+    """
+    for field_name in candidates:
+        if field_name in model._fields:
+            return field_name
+    return candidates[-1]
+
+
 class StockPicking(models.Model):
     """Add the StockSense operation abstraction on top of pickings.
 
@@ -184,17 +212,17 @@ class StockPicking(models.Model):
     operation_done_qty = fields.Float(
         string='Processed',
         compute='_compute_operation_metrics',
-        store=True,
         digits='Product Unit of Measure',
-        help="Total quantity already processed for this operation.",
+        help="Total quantity already processed for this operation. Read live "
+             "from the moves: the field holding it is named 'quantity_done' "
+             "on Odoo 16.0 and 'quantity' on Odoo 17.0.",
     )
     operation_progress = fields.Float(
         string='Progress',
         compute='_compute_operation_metrics',
-        store=True,
         digits=(16, 2),
         help="Percentage of the demanded quantity already processed "
-             "(0 - 100).",
+             "(0 - 100). Read live from the moves.",
     )
     operation_delay_days = fields.Integer(
         string='Delay (Days)',
@@ -247,12 +275,12 @@ class StockPicking(models.Model):
     operation_stock_impact = fields.Float(
         string='Stock Impact',
         compute='_compute_operation_stock_impact',
-        store=True,
         digits='Product Unit of Measure',
         help="Signed effect of the operation on the quantity on hand: "
              "positive when goods enter the stock (receipt), negative when "
              "they leave it (delivery) and zero for an internal transfer, "
-             "which only moves goods between two stock locations.",
+             "which only moves goods between two stock locations. Read live "
+             "from the moves.",
     )
 
     # ------------------------------------------------------------------
@@ -276,18 +304,21 @@ class StockPicking(models.Model):
             picking.operation_state = PICKING_STATE_TO_OPERATION_STATE.get(
                 picking.state, 'draft')
 
-    @api.depends(
-        'move_ids',
-        'move_ids.product_uom_qty',
-        'move_ids.quantity',
-        'move_ids.state',
-    )
+    @api.depends('move_ids', 'move_ids.product_uom_qty', 'move_ids.state')
     def _compute_operation_metrics(self):
-        """Aggregate the demand, the processed quantity and the progress."""
+        """Aggregate the demand, the processed quantity and the progress.
+
+        The processed quantity is read through
+        :func:`get_done_quantity_field` because Odoo 17.0 renamed
+        ``stock.move.quantity_done`` to ``quantity``. The fields derived from
+        it are computed live instead of being stored, so their value is
+        always accurate on both versions.
+        """
+        done_qty_field = get_done_quantity_field(self.env['stock.move'])
         for picking in self:
             moves = picking.move_ids.filtered(lambda move: move.state != 'cancel')
             demand_qty = sum(moves.mapped('product_uom_qty'))
-            done_qty = sum(moves.mapped('quantity'))
+            done_qty = sum(moves.mapped(done_qty_field))
             picking.operation_move_count = len(moves)
             picking.operation_demand_qty = demand_qty
             picking.operation_done_qty = done_qty
@@ -368,7 +399,8 @@ class StockPicking(models.Model):
                 sum(quants.mapped('quantity'))
                 - sum(quants.mapped('reserved_quantity')))
 
-    @api.depends('move_ids.operation_stock_impact')
+    @api.depends('move_ids', 'move_ids.state', 'move_ids.location_id',
+                 'move_ids.location_dest_id')
     def _compute_operation_stock_impact(self):
         """Sum the signed impact of the operation's moves.
 
@@ -424,14 +456,14 @@ class StockPicking(models.Model):
         domain = []
         if operation_types:
             domain.append(('operation_type', 'in', list(operation_types)))
-        # Always return exactly one entry per declared badge: the summary is
-        # a fixed-size contract for the dashboard, so unmapped groups (e.g.
-        # a picking whose operation type could not be resolved) are ignored.
-        summary = {state: 0 for state, _label in OPERATION_STATES}
-        for operation_state, count in self._read_group(
-                domain, ['operation_state'], ['__count']):
-            if operation_state in summary:
-                summary[operation_state] += count
+        # Always return exactly one entry per declared badge: the summary is a
+        # fixed-size contract for the dashboard. One count per status is used
+        # on purpose: _read_group (Odoo 17.0) and read_group (Odoo 16.0) do
+        # not share the same signature.
+        summary = {}
+        for operation_state, _label in OPERATION_STATES:
+            summary[operation_state] = self.search_count(
+                domain + [('operation_state', '=', operation_state)])
         return summary
 
 
@@ -456,7 +488,6 @@ class StockMove(models.Model):
     operation_stock_impact = fields.Float(
         string='Stock Impact',
         compute='_compute_operation_stock_impact',
-        store=True,
         digits='Product Unit of Measure',
         help="Signed effect of the movement on the quantity on hand: "
              "negative when the goods leave the stock, positive when they "
@@ -464,19 +495,59 @@ class StockMove(models.Model):
              "location to another (internal transfers). "
              "Uses the same logic as the native movement analysis.",
     )
+    operation_done_qty = fields.Float(
+        string='Processed',
+        compute='_compute_operation_done_qty',
+        digits='Product Unit of Measure',
+        help="Processed quantity of the movement, exposed by StockSense so "
+             "that views, reports and the move history ledger work on Odoo "
+             "16.0 ('quantity_done') and 17.0 ('quantity') alike.",
+    )
 
-    @api.depends('location_id.usage', 'location_dest_id.usage', 'quantity')
+    @api.depends('location_id.usage', 'location_dest_id.usage', 'state')
     def _compute_operation_stock_impact(self):
         """Derive the signed stock impact from the nature of the locations."""
+        done_qty_field = get_done_quantity_field(self.env['stock.move'])
         for move in self:
+            quantity = move[done_qty_field]
             source_in_stock = (
                 move.location_id.usage in INTERNAL_LOCATION_USAGES)
             destination_in_stock = (
                 move.location_dest_id.usage in INTERNAL_LOCATION_USAGES)
             if source_in_stock and not destination_in_stock:
-                move.operation_stock_impact = -move.quantity
+                move.operation_stock_impact = -quantity
             elif destination_in_stock and not source_in_stock:
-                move.operation_stock_impact = move.quantity
+                move.operation_stock_impact = quantity
             else:
                 # both sides hold stock (internal transfer) or neither does
                 move.operation_stock_impact = 0.0
+
+    @api.depends('state', 'product_uom_qty')
+    def _compute_operation_done_qty(self):
+        """Read the processed quantity under its version specific name."""
+        done_qty_field = get_done_quantity_field(self.env['stock.move'])
+        for move in self:
+            move.operation_done_qty = move[done_qty_field]
+
+
+class StockMoveLine(models.Model):
+    """Expose the processed quantity of a move line under a stable name."""
+
+    _inherit = 'stock.move.line'
+
+    operation_done_qty = fields.Float(
+        string='Processed',
+        compute='_compute_operation_done_qty',
+        digits='Product Unit of Measure',
+        help="Processed quantity of the detailed operation, exposed by "
+             "StockSense so that the views work on Odoo 16.0 ('qty_done') and "
+             "17.0 ('quantity') alike.",
+    )
+
+    @api.depends('move_id', 'move_id.state')
+    def _compute_operation_done_qty(self):
+        """Read the processed quantity under its version specific name."""
+        done_qty_field = get_done_quantity_field(
+            self.env['stock.move.line'], ('quantity', 'qty_done'))
+        for line in self:
+            line.operation_done_qty = line[done_qty_field]

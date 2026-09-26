@@ -54,6 +54,7 @@ Technical notes
         'views/product_views.xml',
         'views/reorder_rule_views.xml',
         'views/stock_operation_views.xml',
+        'views/internal_transfer_views.xml',
         'views/menu.xml',
     ],
     'application': True,
