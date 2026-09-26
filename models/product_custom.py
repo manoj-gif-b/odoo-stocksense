@@ -12,6 +12,7 @@ This file contains:
 """
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
+from odoo.osv import expression
 
 
 class StockSenseReorderRule(models.Model):
@@ -171,6 +172,7 @@ class ProductTemplate(models.Model):
         help="Set once the initial stock has been applied on the stock location.")
     stock_status = fields.Char(
         string='Stock Status', compute='_compute_stock_status',
+        search='_search_stock_status',
         help="Readable stock status of the product, computed from the quantity "
              "on hand:\n"
              "- Out of Stock: nothing on hand,\n"
@@ -205,6 +207,58 @@ class ProductTemplate(models.Model):
                 template.stock_status = 'Low Stock'
             else:
                 template.stock_status = 'In Stock'
+
+    # ------------------------------------------------------------------
+    # Stock status search (the field is not stored)
+    # ------------------------------------------------------------------
+    @api.model
+    def _ss_stock_status_domains(self):
+        """Return the search domain of the products in each stock status."""
+        low_stock_ids = self._ss_low_stock_ids()
+        return {
+            'Out of Stock': [('qty_available', '<=', 0.0)],
+            'Low Stock': [('id', 'in', low_stock_ids)],
+            'In Stock': ['&', ('qty_available', '>', 0.0),
+                         ('id', 'not in', low_stock_ids)],
+        }
+
+    @api.model
+    def _ss_low_stock_ids(self):
+        """Ids of the products on hand but at or below their reorder point."""
+        candidates = self.search([
+            ('qty_available', '>', 0.0),
+            ('ss_reorder_point', '>', 0.0),
+        ])
+        return candidates.filtered(
+            lambda template: template.qty_available <= template.ss_reorder_point,
+        ).ids
+
+    @api.model
+    def _search_stock_status(self, operator, value):
+        """Allow searching / filtering the products on ``stock_status``.
+
+        The field is not stored, so Odoo delegates the search to this method
+        (the same mechanism as ``_search_qty_available`` in stock).
+        """
+        if isinstance(value, (list, tuple, set)):
+            values = [str(item).lower() for item in value]
+        else:
+            values = [str(value).lower()]
+        domains = self._ss_stock_status_domains()
+        partial = operator in ('ilike', 'not ilike', 'like', 'not like')
+        matching = [
+            status for status in domains
+            if any(status.lower() == item
+                   or (partial and item in status.lower())
+                   for item in values)
+        ]
+        if operator in ('!=', 'not in', 'not ilike', 'not like'):
+            selected = [status for status in domains if status not in matching]
+        else:
+            selected = matching
+        if not selected:
+            return [('id', '=', 0)]
+        return expression.OR([domains[status] for status in selected])
 
     # ------------------------------------------------------------------
     # Constraints

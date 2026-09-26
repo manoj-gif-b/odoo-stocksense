@@ -115,6 +115,14 @@
                 <field name="ss_sku" string="StockSense SKU"/>
                 <field name="default_code"/>
                 <field name="categ_id"/>
+                <field name="stock_status" string="Stock Status"/>
+                <filter name="filter_ss_low_stock" string="Low Stock"
+                    domain="[('stock_status', '=', 'Low Stock')]"/>
+                <filter name="filter_ss_out_of_stock" string="Out of Stock"
+                    domain="[('stock_status', '=', 'Out of Stock')]"/>
+                <filter name="filter_ss_to_replenish" string="Low or Out of Stock"
+                    domain="[('stock_status', 'in', ['Low Stock', 'Out of Stock'])]"/>
+                <separator/>
                 <filter name="filter_ss_storable" string="Storable"
                     domain="[('detailed_type', '=', 'product')]"/>
                 <filter name="filter_ss_with_rule" string="With Reorder Rules"
@@ -153,6 +161,7 @@
                             <field name="ss_reorder_rule_count" invisible="1"/>
                         </group>
                         <group string="Replenishment Summary" name="ss_replenishment">
+                            <field name="stock_status" readonly="1"/>
                             <field name="ss_reorder_point" readonly="1"/>
                             <field name="ss_reorder_max_qty" readonly="1"/>
                         </group>
@@ -290,19 +299,6 @@
         </field>
     </record>
 
-    <!-- ==================================================================
-         Menus
-         ================================================================== -->
-    <menuitem id="menu_stocksense_root" name="StockSense"
-        parent="stock.menu_stock_root" sequence="90" groups="stock.group_stock_user"/>
-    <menuitem id="menu_stocksense_product_template" name="Products"
-        parent="menu_stocksense_root" action="action_stocksense_product_template"
-        sequence="10" groups="stock.group_stock_user"/>
-    <menuitem id="menu_stocksense_reorder_rule" name="Reorder Rules"
-        parent="menu_stocksense_root" action="action_stocksense_reorder_rule"
-        sequence="20" groups="stock.group_stock_user"/>
-    <menuitem id="menu_stocksense_product_category" name="Product Categories"
-        parent="menu_stocksense_root" action="action_stocksense_product_category"
-        sequence="30" groups="stock.group_stock_manager"/>
+    <!-- Menus of the StockSense app are declared in views/menu.xml. -->
 
 </odoo>

@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Part of StockSense. See LICENSE file for full copyright and licensing details. -->
+<odoo>
+
+    <record id="view_stock_adjustment_tree" model="ir.ui.view">
+        <field name="name">stock.adjustment.tree</field>
+        <field name="model">stock.adjustment</field>
+        <field name="arch" type="xml">
+            <tree string="Inventory Adjustments" decoration-muted="state == 'cancel'">
+                <field name="name"/>
+                <field name="date"/>
+                <field name="location_id"/>
+                <field name="reason"/>
+                <field name="user_id" optional="show"/>
+                <field name="line_count" string="Lines"/>
+                <field name="difference_qty"
+                       decoration-danger="difference_qty &lt; 0"
+                       decoration-success="difference_qty &gt; 0"/>
+                <field name="state" widget="badge"
+                       decoration-success="state == 'done'"
+                       decoration-info="state == 'draft'"
+                       decoration-muted="state == 'cancel'"/>
+                <field name="company_id" groups="base.group_multi_company" optional="hide"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_stock_adjustment_form" model="ir.ui.view">
+        <field name="name">stock.adjustment.form</field>
+        <field name="model">stock.adjustment</field>
+        <field name="arch" type="xml">
+            <form string="Inventory Adjustment">
+                <header>
+                    <!-- Applying an adjustment moves stock and its valuation, so
+                         it is restricted to the Inventory managers, exactly like
+                         core gates the "Apply" button of the Inventory app. -->
+                    <button name="action_validate" type="object" string="Apply"
+                            class="oe_highlight" groups="stock.group_stock_manager"
+                            invisible="state != 'draft'"/>
+                    <button name="action_cancel" type="object" string="Cancel"
+                            invisible="state != 'draft'"/>
+                    <button name="action_draft" type="object" string="Reset to Draft"
+                            invisible="state != 'cancel'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,done"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="date"/>
+                            <field name="location_id"/>
+                            <field name="adjustment_type" widget="radio"/>
+                        </group>
+                        <group>
+                            <field name="user_id"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                            <field name="validated_date" invisible="state != 'done'"/>
+                        </group>
+                    </group>
+                    <group>
+                        <field name="reason" placeholder="e.g. Cycle count W34"/>
+                    </group>
+                    <notebook>
+                        <page string="Products" name="lines">
+                            <field name="line_ids" nolabel="1" readonly="state != 'draft'">
+                                <tree editable="bottom"
+                                      decoration-danger="difference_qty &lt; 0"
+                                      decoration-success="difference_qty &gt; 0">
+                                    <field name="product_id"/>
+                                    <field name="location_id"/>
+                                    <field name="lot_id" groups="stock.group_production_lot" optional="show"/>
+                                    <field name="package_id" groups="stock.group_tracking_lot" optional="hide"/>
+                                    <field name="owner_id" groups="stock.group_tracking_owner" optional="hide"/>
+                                    <field name="theoretical_qty" readonly="1"/>
+                                    <field name="counted_qty"/>
+                                    <field name="difference_qty" readonly="1"/>
+                                    <field name="product_uom_id" groups="uom.group_uom" optional="show"/>
+                                    <field name="company_id" invisible="1"/>
+                                </tree>
+                            </field>
+                        </page>
+                        <page string="Notes" name="notes">
+                            <field name="note" placeholder="Anything worth recording about this count..."/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <div class="oe_chatter">
+                    <field name="message_follower_ids"/>
+                    <field name="activity_ids"/>
+                    <field name="message_ids"/>
+                </div>
+            </form>
+        </field>
+    </record>
+    <record id="view_stock_adjustment_search" model="ir.ui.view">
+        <field name="name">stock.adjustment.search</field>
+        <field name="model">stock.adjustment</field>
+        <field name="arch" type="xml">
+            <search string="Inventory Adjustments">
+                <field name="name"/>
+                <field name="reason"/>
+                <field name="location_id"/>
+                <field name="user_id"/>
+                <field name="date"/>
+                <filter name="filter_draft" string="Draft" domain="[('state', '=', 'draft')]"/>
+                <filter name="filter_done" string="Applied" domain="[('state', '=', 'done')]"/>
+                <filter name="filter_cancel" string="Cancelled" domain="[('state', '=', 'cancel')]"/>
+                <separator/>
+                <filter name="filter_my" string="My Adjustments" domain="[('user_id', '=', uid)]"/>
+                <filter name="filter_today" string="Today"
+                        domain="[('date', '&gt;=', context_today().strftime('%Y-%m-%d'))]"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_state" string="Status" context="{'group_by': 'state'}"/>
+                    <filter name="group_location" string="Location" context="{'group_by': 'location_id'}"/>
+                    <filter name="group_user" string="Responsible" context="{'group_by': 'user_id'}"/>
+                    <filter name="group_date" string="Date" context="{'group_by': 'date:month'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_stock_adjustment" model="ir.actions.act_window">
+        <field name="name">Inventory Adjustments</field>
+        <field name="res_model">stock.adjustment</field>
+        <field name="view_mode">tree,form</field>
+        <field name="search_view_id" ref="view_stock_adjustment_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Create a new inventory adjustment</p>
+            <p>
+                Count the products physically present in a location, then apply the
+                adjustment to correct the stock through the regular inventory moves.
+            </p>
+        </field>
+    </record>
+
+    <!-- Root menu of the app. It is declared in this file because this file is
+         loaded before dashboard_views.xml, which attaches the Dashboard item
+         to it. -->
+    <menuitem id="menu_stocksense_root"
+              name="StockSense"
+              sequence="15"
+              groups="stock.group_stock_user"/>
+
+    <menuitem id="menu_stock_adjustment"
+              name="Inventory Adjustments"
+              parent="menu_stocksense_root"
+              action="action_stock_adjustment"
+              groups="stock.group_stock_user"
+              sequence="20"/>
+</odoo>

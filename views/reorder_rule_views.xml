@@ -6,8 +6,8 @@
          Native model stock.warehouse.orderpoint, extended by StockSense
          (models/reorder_rule.py).
 
-         NOTE: this file must be loaded after views/product_views.xml because
-         the menu below is attached to menu_stocksense_root.
+         NOTE: the menus of the module are all declared in views/menu.xml,
+         which must therefore be loaded after this file.
          ================================================================== -->
 
     <record id="view_stocksense_orderpoint_tree" model="ir.ui.view">
@@ -174,8 +174,6 @@
         </field>
     </record>
 
-    <menuitem id="menu_stocksense_orderpoint" name="Reordering Rules"
-        parent="menu_stocksense_root" action="action_stocksense_orderpoint"
-        sequence="15" groups="stock.group_stock_user"/>
+    <!-- Menu declared in views/menu.xml. -->
 
 </odoo>

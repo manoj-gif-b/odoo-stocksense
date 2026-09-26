@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Part of StockSense. See LICENSE file for full copyright and licensing details. -->
+<odoo>
+    <data noupdate="1">
+        <!-- Reference of the stock.adjustment documents, e.g. ADJ/2026/00001.
+             noupdate="1" so that a customer renaming/re-padding the sequence
+             through the UI does not get it reset by a later -u stocksense. -->
+        <record id="seq_stock_adjustment" model="ir.sequence">
+            <field name="name">Inventory Adjustment</field>
+            <field name="code">stock.adjustment</field>
+            <field name="prefix">ADJ/%(range_year)s/</field>
+            <field name="padding">5</field>
+        </record>
+    </data>
+</odoo>
