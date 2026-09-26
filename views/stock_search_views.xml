@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Part of StockSense. See LICENSE file for full copyright and licensing details. -->
+<odoo>
+
+    <!-- ==================================================================
+         Dynamic filters of the stock documents.
+
+         A search view is bound to a single model, so the three filter axes
+         required by StockSense (Document Type, Status and Group By) are
+         declared once per document family:
+
+         * ``stock.picking`` (receipts, deliveries and internal transfers) ->
+           ``view_stocksense_stock_document_search``, used by the four
+           StockSense operation actions;
+         * ``stock.adjustment`` (inventory adjustments) ->
+           ``view_stocksense_adjustment_search``.
+
+         The grouped fields (warehouse, location, product category) are
+         declared on the models, see ``models/stock_search.py``: Odoo can only
+         group on stored fields of the searched model.
+         ================================================================== -->
+
+    <record id="view_stocksense_stock_document_search" model="ir.ui.view">
+        <field name="name">stocksense.stock.document.search</field>
+        <field name="model">stock.picking</field>
+        <field name="arch" type="xml">
+            <search string="Stock Documents">
+                <!-- Search bar -->
+                <field name="name" string="Document"
+                       filter_domain="['|', ('name', 'ilike', self), ('origin', 'ilike', self)]"/>
+                <field name="partner_id"/>
+                <field name="origin"/>
+                <field name="picking_type_id"
+                       string="Operation Type (Detailed)"/>
+                <field name="location_id"/>
+                <field name="location_dest_id"/>
+                <field name="ss_warehouse_id"/>
+                <field name="ss_product_categ_id"/>
+                <field name="scheduled_date"/>
+
+                <!-- Document Type: the receipt / delivery / internal
+                     families of stock.picking. Inventory adjustments are a
+                     different model, see the search view below. -->
+                <group expand="0" string="Document Type">
+                    <filter name="ss_document_receipts" string="Receipts"
+                            domain="[('operation_type', '=', 'receipt')]"/>
+                    <filter name="ss_document_deliveries" string="Deliveries"
+                            domain="[('operation_type', '=', 'delivery')]"/>
+                    <filter name="ss_document_internal" string="Internal"
+                            domain="[('operation_type', '=', 'internal')]"/>
+                </group>
+
+                <!-- Status: the StockSense badges of the operations. -->
+                <group expand="0" string="Status">
+                    <filter name="ss_status_draft" string="Draft"
+                            domain="[('operation_state', '=', 'draft')]"/>
+                    <filter name="ss_status_waiting" string="Waiting"
+                            domain="[('operation_state', '=', 'waiting')]"/>
+                    <filter name="ss_status_ready" string="Ready"
+                            domain="[('operation_state', '=', 'ready')]"/>
+                    <filter name="ss_status_done" string="Done"
+                            domain="[('operation_state', '=', 'done')]"/>
+                    <filter name="ss_status_canceled" string="Canceled"
+                            domain="[('operation_state', '=', 'cancelled')]"/>
+                </group>
+
+                <group expand="0" string="Quick Filters">
+                    <filter name="ss_to_process" string="To Process"
+                            domain="[('operation_state', 'not in', ('done', 'cancelled'))]"/>
+                    <filter name="ss_overdue" string="Overdue"
+                            domain="[('operation_state', 'not in', ('done', 'cancelled')), ('scheduled_date', '&lt;', context_today().strftime('%Y-%m-%d'))]"/>
+                </group>
+
+                <!-- Group By: warehouse, location and product category come
+                     first, they are the grouping axes of the requirement. -->
+                <group expand="0" string="Group By">
+                    <filter name="ss_group_warehouse" string="Warehouse"
+                            context="{'group_by': 'ss_warehouse_id'}"/>
+                    <filter name="ss_group_location" string="Location"
+                            context="{'group_by': 'location_id'}"/>
+                    <filter name="ss_group_product_categ" string="Product Category"
+                            context="{'group_by': 'ss_product_categ_id'}"/>
+                    <separator/>
+                    <filter name="ss_group_document_type" string="Document Type"
+                            context="{'group_by': 'operation_type'}"/>
+                    <filter name="ss_group_status" string="Status"
+                            context="{'group_by': 'operation_state'}"/>
+                    <filter name="ss_group_partner" string="Contact"
+                            context="{'group_by': 'partner_id'}"/>
+                    <filter name="ss_group_scheduled_date" string="Scheduled Date"
+                            context="{'group_by': 'scheduled_date'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- ==================================================================
+         Dynamic filters - Inventory adjustments (stock.adjustment).
+
+         Same filter axes as the operation lists: Document Type, Status and
+         Group By (warehouse, location, product category). Inventory
+         adjustments are the fourth StockSense document type, so "Adjustments"
+         is the Document Type entry of this view.
+         ================================================================== -->
+    <record id="view_stocksense_adjustment_search" model="ir.ui.view">
+        <field name="name">stocksense.stock.adjustment.search</field>
+        <field name="model">stock.adjustment</field>
+        <field name="arch" type="xml">
+            <search string="Stock Documents - Inventory Adjustments">
+                <!-- Search bar -->
+                <field name="name" string="Document"/>
+                <field name="reason"/>
+                <field name="location_id"/>
+                <field name="ss_warehouse_id"/>
+                <field name="ss_product_categ_id"/>
+                <field name="user_id"/>
+                <field name="date"/>
+
+                <group expand="0" string="Document Type">
+                    <filter name="ss_document_adjustments" string="Adjustments"
+                            domain="[('adjustment_type', 'in', ('count', 'increase', 'decrease'))]"
+                            help="Inventory adjustments, whatever the kind of count."/>
+                </group>
+
+                <group expand="0" string="Adjustment Type">
+                    <filter name="ss_adjustment_count" string="Inventory Count"
+                            domain="[('adjustment_type', '=', 'count')]"/>
+                    <filter name="ss_adjustment_increase" string="Increase Only"
+                            domain="[('adjustment_type', '=', 'increase')]"/>
+                    <filter name="ss_adjustment_decrease" string="Decrease Only"
+                            domain="[('adjustment_type', '=', 'decrease')]"/>
+                </group>
+
+                <!-- Status: an adjustment stops at draft / done / cancel. -->
+                <group expand="0" string="Status">
+                    <filter name="ss_status_draft" string="Draft"
+                            domain="[('state', '=', 'draft')]"/>
+                    <filter name="ss_status_done" string="Done"
+                            domain="[('state', '=', 'done')]"/>
+                    <filter name="ss_status_canceled" string="Canceled"
+                            domain="[('state', '=', 'cancel')]"/>
+                </group>
+
+                <group expand="0" string="Quick Filters">
+                    <filter name="ss_my_adjustments" string="My Adjustments"
+                            domain="[('user_id', '=', uid)]"/>
+                    <filter name="ss_today" string="Today"
+                            domain="[('date', '&gt;=', context_today().strftime('%Y-%m-%d'))]"/>
+                </group>
+
+                <group expand="0" string="Group By">
+                    <filter name="ss_group_warehouse" string="Warehouse"
+                            context="{'group_by': 'ss_warehouse_id'}"/>
+                    <filter name="ss_group_location" string="Location"
+                            context="{'group_by': 'location_id'}"/>
+                    <filter name="ss_group_product_categ" string="Product Category"
+                            context="{'group_by': 'ss_product_categ_id'}"/>
+                    <separator/>
+                    <filter name="ss_group_status" string="Status"
+                            context="{'group_by': 'state'}"/>
+                    <filter name="ss_group_user" string="Responsible"
+                            context="{'group_by': 'user_id'}"/>
+                    <filter name="ss_group_date" string="Date"
+                            context="{'group_by': 'date:month'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- ==================================================================
+         Wiring of the dynamic filters.
+
+         The operation and adjustment actions are declared next to their own
+         views; they are only pointed to the search views of this file here,
+         so the native Inventory menus keep the core search view while the
+         StockSense lists get the filters above.
+         ================================================================== -->
+    <record id="action_stock_operation_all" model="ir.actions.act_window">
+        <field name="search_view_id" ref="view_stocksense_stock_document_search"/>
+    </record>
+
+    <record id="action_stock_operation_receipt" model="ir.actions.act_window">
+        <field name="search_view_id" ref="view_stocksense_stock_document_search"/>
+    </record>
+
+    <record id="action_stock_operation_delivery" model="ir.actions.act_window">
+        <field name="search_view_id" ref="view_stocksense_stock_document_search"/>
+    </record>
+
+    <record id="action_stock_operation_internal" model="ir.actions.act_window">
+        <field name="search_view_id" ref="view_stocksense_stock_document_search"/>
+    </record>
+
+    <record id="action_stock_adjustment" model="ir.actions.act_window">
+        <field name="search_view_id" ref="view_stocksense_adjustment_search"/>
+    </record>
+
+</odoo>

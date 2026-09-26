@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Part of StockSense. See LICENSE file for full copyright and licensing details. -->
+<odoo>
+
+    <!-- ==================================================================
+         Move History: ledger of every stock movement.
+
+         One line per stock movement belonging to a StockSense operation
+         (receipt, delivery or internal transfer), with the demand, the
+         processed quantity and the signed effect on the stock on hand.
+
+         Valid on Odoo 16.0 and 17.0: only version stable fields are used.
+         The processed quantity is read through the StockSense
+         ``operation_done_qty`` field because ``stock.move.quantity_done``
+         was renamed ``quantity`` in 17.0, and no chatter is added because
+         ``stock.move`` does not inherit ``mail.thread``.
+         ================================================================== -->
+
+    <record id="view_stock_move_history_tree" model="ir.ui.view">
+        <field name="name">stock.move.history.tree</field>
+        <field name="model">stock.move</field>
+        <field name="arch" type="xml">
+            <tree string="Move History"
+                  create="false"
+                  duplicate="false"
+                  default_order="date desc, id desc"
+                  decoration-danger="operation_stock_impact &lt; 0"
+                  decoration-success="operation_stock_impact &gt; 0"
+                  decoration-muted="state == 'cancel'">
+                <field name="date"/>
+                <field name="reference"/>
+                <field name="operation_type" widget="badge"
+                       decoration-success="operation_type == 'receipt'"
+                       decoration-info="operation_type == 'delivery'"
+                       decoration-warning="operation_type == 'internal'"/>
+                <field name="product_id"/>
+                <field name="description_picking" optional="hide"/>
+                <field name="product_uom_qty" string="Demand" sum="Total Demand"/>
+                <field name="operation_done_qty" string="Processed"/>
+                <field name="product_uom" string="Unit" groups="uom.group_uom"
+                       options="{'no_open': True, 'no_create': True}"/>
+                <field name="location_id" string="From"
+                       options="{'no_create': True}"/>
+                <field name="location_dest_id" string="To"
+                       options="{'no_create': True}"/>
+                <field name="operation_stock_impact" string="Stock Impact"/>
+                <field name="state" widget="badge" optional="show"
+                       decoration-muted="state == 'draft'"
+                       decoration-info="state == 'assigned'"
+                       decoration-success="state == 'done'"
+                       decoration-danger="state == 'cancel'"
+                       decoration-warning="state not in ('draft', 'assigned', 'done', 'cancel')"/>
+                <field name="picking_id" optional="hide"/>
+                <field name="picking_type_id" optional="hide"/>
+                <field name="origin" optional="hide"/>
+                <field name="date_deadline" optional="hide"/>
+                <field name="company_id" optional="hide"
+                       groups="base.group_multi_company"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_stock_move_history_form" model="ir.ui.view">
+        <field name="name">stock.move.history.form</field>
+        <field name="model">stock.move</field>
+        <field name="arch" type="xml">
+            <form string="Stock Movement" create="false" edit="false">
+                <header>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,waiting,confirmed,assigned,done"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="reference" readonly="1"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group name="history_operation" string="Operation">
+                            <field name="operation_type" widget="badge"
+                                   decoration-success="operation_type == 'receipt'"
+                                   decoration-info="operation_type == 'delivery'"
+                                   decoration-warning="operation_type == 'internal'"/>
+                            <field name="date"/>
+                            <field name="origin"/>
+                            <field name="picking_id"/>
+                            <field name="picking_type_id"/>
+                            <field name="company_id"
+                                   groups="base.group_multi_company"/>
+                        </group>
+                        <group name="history_product" string="Product">
+                            <field name="product_id"/>
+                            <field name="name" string="Description"/>
+                            <field name="description_picking"/>
+                            <field name="product_uom_qty" string="Demand"/>
+                            <field name="operation_done_qty" string="Processed"/>
+                            <field name="product_uom" string="Unit"
+                                   groups="uom.group_uom"
+                                   options="{'no_open': True, 'no_create': True}"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group name="history_route" string="Route">
+                            <field name="location_id" string="From"
+                                   options="{'no_create': True}"/>
+                            <field name="location_dest_id" string="To"
+                                   options="{'no_create': True}"/>
+                            <field name="operation_stock_impact"
+                                   string="Stock Impact"/>
+                            <field name="date_deadline"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Detailed Operations" name="detailed_operations">
+                            <field name="move_line_ids" readonly="1">
+                                <tree string="Detailed Operations">
+                                    <field name="product_id"/>
+                                    <field name="lot_id" optional="show"/>
+                                    <field name="location_id"/>
+                                    <field name="location_dest_id"/>
+                                    <field name="operation_done_qty"/>
+                                    <field name="product_uom_id" groups="uom.group_uom"/>
+                                </tree>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_stock_move_history_search" model="ir.ui.view">
+        <field name="name">stock.move.history.search</field>
+        <field name="model">stock.move</field>
+        <field name="arch" type="xml">
+            <search string="Move History">
+                <field name="reference"/>
+                <field name="product_id"/>
+                <field name="picking_id"/>
+                <field name="origin"/>
+                <field name="location_id"/>
+                <field name="location_dest_id"/>
+                <field name="operation_type"/>
+                <separator/>
+                <filter name="history_today" string="Today"
+                        domain="[('date', '&gt;=', context_today().strftime('%Y-%m-%d'))]"/>
+                <filter name="history_last_week" string="Last 7 Days"
+                        domain="[('date', '&gt;=', (context_today() + relativedelta(days=-7)).strftime('%Y-%m-%d'))]"/>
+                <filter name="history_this_month" string="This Month"
+                        domain="[('date', '&gt;=', context_today().strftime('%Y-%m-01'))]"/>
+                <separator/>
+                <filter name="history_receipt" string="Receipts"
+                        domain="[('operation_type', '=', 'receipt')]"/>
+                <filter name="history_delivery" string="Deliveries"
+                        domain="[('operation_type', '=', 'delivery')]"/>
+                <filter name="history_internal" string="Internal Transfers"
+                        domain="[('operation_type', '=', 'internal')]"/>
+                <separator/>
+                <filter name="history_stock_in" string="Stock In"
+                        domain="[('location_id.usage', 'not in', ('internal', 'transit')), ('location_dest_id.usage', 'in', ('internal', 'transit'))]"/>
+                <filter name="history_stock_out" string="Stock Out"
+                        domain="[('location_id.usage', 'in', ('internal', 'transit')), ('location_dest_id.usage', 'not in', ('internal', 'transit'))]"/>
+                <filter name="history_stock_transfer" string="Stock to Stock"
+                        domain="[('location_id.usage', 'in', ('internal', 'transit')), ('location_dest_id.usage', 'in', ('internal', 'transit'))]"/>
+                <separator/>
+                <filter name="history_done" string="Done"
+                        domain="[('state', '=', 'done')]"/>
+                <filter name="history_to_process" string="To Process"
+                        domain="[('state', 'not in', ('done', 'cancel'))]"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_history_operation_type" string="Operation Type"
+                            context="{'group_by': 'operation_type'}"/>
+                    <filter name="group_history_product" string="Product"
+                            context="{'group_by': 'product_id'}"/>
+                    <filter name="group_history_source_location" string="Source Location"
+                            context="{'group_by': 'location_id'}"/>
+                    <filter name="group_history_dest_location"
+                            string="Destination Location"
+                            context="{'group_by': 'location_dest_id'}"/>
+                    <filter name="group_history_reference" string="Reference"
+                            context="{'group_by': 'reference'}"/>
+                    <filter name="group_history_date" string="Date"
+                            context="{'group_by': 'date:month'}"/>
+                    <filter name="group_history_state" string="Status"
+                            context="{'group_by': 'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_stock_move_history" model="ir.actions.act_window">
+        <field name="name">Move History</field>
+        <field name="res_model">stock.move</field>
+        <field name="view_mode">tree,form</field>
+        <field name="domain">[('operation_type', '!=', False)]</field>
+        <field name="search_view_id" ref="view_stock_move_history_search"/>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'tree', 'view_id': ref('view_stock_move_history_tree')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('view_stock_move_history_form')})]"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No stock movement found.</p>
+            <p>Every receipt, delivery and internal transfer is logged here,
+               with the signed effect of the movement on the quantity on hand:
+               positive when goods enter the stock, negative when they leave
+               it and zero for a transfer between two stock locations.</p>
+        </field>
+    </record>
+
+    <menuitem id="menu_stock_move_history"
+              name="Move History"
+              parent="menu_stock_operations_root"
+              action="action_stock_move_history"
+              sequence="50"/>
+
+</odoo>

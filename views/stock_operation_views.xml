@@ -121,7 +121,7 @@
                                     <field name="product_id"/>
                                     <field name="description_picking" optional="hide"/>
                                     <field name="product_uom_qty" string="Demand"/>
-                                    <field name="quantity" string="Processed"/>
+                                    <field name="operation_done_qty" string="Processed"/>
                                     <field name="location_id" optional="hide"/>
                                     <field name="location_dest_id" optional="hide"/>
                                     <field name="state" optional="hide"/>
@@ -135,9 +135,8 @@
                                     <field name="lot_id" optional="show"/>
                                     <field name="location_id"/>
                                     <field name="location_dest_id"/>
-                                    <field name="quantity"/>
+                                    <field name="operation_done_qty"/>
                                     <field name="product_uom_id" groups="uom.group_uom"/>
-                                    <field name="picked" optional="hide"/>
                                 </tree>
                             </field>
                         </page>
@@ -251,19 +250,8 @@
         </field>
     </record>
 
-    <record id="action_stock_operation_internal" model="ir.actions.act_window">
-        <field name="name">Internal Transfers</field>
-        <field name="res_model">stock.picking</field>
-        <field name="view_mode">tree,form</field>
-        <field name="domain">[('operation_type', '=', 'internal')]</field>
-        <field name="search_view_id" ref="view_stock_operation_search"/>
-        <field name="view_ids" eval="[(5, 0, 0),
-            (0, 0, {'view_mode': 'tree', 'view_id': ref('view_stock_operation_tree')}),
-            (0, 0, {'view_mode': 'form', 'view_id': ref('view_stock_operation_form')})]"/>
-        <field name="help" type="html">
-            <p class="o_view_nocontent_smiling_face">No internal transfer found.</p>
-        </field>
-    </record>
+    <!-- Internal transfers now own their own views and actions, declared in
+         views/internal_transfer_views.xml. -->
 
     <!-- ================================================================== -->
     <!-- Menus: Inventory > Stock Operations                                 -->
@@ -289,10 +277,5 @@
               parent="menu_stock_operations_root"
               action="action_stock_operation_delivery"
               sequence="30"/>
-    <menuitem id="menu_stock_operation_internal"
-              name="Internal Transfers"
-              parent="menu_stock_operations_root"
-              action="action_stock_operation_internal"
-              sequence="40"/>
 
 </odoo>

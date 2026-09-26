@@ -1,0 +1,263 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Part of StockSense. See LICENSE file for full copyright and licensing details. -->
+<odoo>
+
+    <!-- ==================================================================
+         Internal transfers (StockSense - Stock Operations).
+
+         Valid on Odoo 16.0 and 17.0: the <tree> tag, the direct Python
+         expressions (invisible/decoration) and the tree,form view mode are
+         supported by both versions.
+         ================================================================== -->
+
+    <record id="view_internal_transfer_tree" model="ir.ui.view">
+        <field name="name">stock.picking.internal.transfer.tree</field>
+        <field name="model">stock.picking</field>
+        <field name="arch" type="xml">
+            <tree string="Internal Transfers"
+                  create="false"
+                  default_order="scheduled_date desc, id desc"
+                  decoration-danger="operation_is_late and operation_state not in ('done', 'cancelled')"
+                  decoration-warning="operation_state == 'waiting'"
+                  decoration-muted="operation_state in ('done', 'cancelled')">
+                <field name="name"/>
+                <field name="operation_state" widget="badge"
+                       decoration-muted="operation_state == 'draft'"
+                       decoration-warning="operation_state == 'waiting'"
+                       decoration-info="operation_state == 'ready'"
+                       decoration-success="operation_state == 'done'"
+                       decoration-danger="operation_state == 'cancelled'"/>
+                <field name="internal_source_warehouse_id" optional="show"/>
+                <field name="internal_dest_warehouse_id" optional="show"/>
+                <field name="internal_is_cross_warehouse" optional="hide"/>
+                <field name="location_id" string="From"/>
+                <field name="location_dest_id" string="To"/>
+                <field name="internal_source_available_qty" optional="show"/>
+                <field name="operation_demand_qty" optional="show"/>
+                <field name="operation_progress" widget="progressbar" optional="show"/>
+                <field name="scheduled_date"/>
+                <field name="operation_delay_days" optional="hide"/>
+                <field name="operation_is_late" optional="hide"/>
+                <field name="operation_stock_impact" optional="hide"/>
+                <field name="picking_type_id" optional="hide"/>
+                <field name="origin" optional="hide"/>
+                <field name="state" optional="hide"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_internal_transfer_form" model="ir.ui.view">
+        <field name="name">stock.picking.internal.transfer.form</field>
+        <field name="model">stock.picking</field>
+        <field name="arch" type="xml">
+            <form string="Internal Transfer">
+                <header>
+                    <button name="action_confirm" type="object" string="Mark as Todo"
+                            class="oe_highlight" groups="stock.group_stock_user"
+                            invisible="operation_state != 'draft'"/>
+                    <button name="action_assign" type="object" string="Check Availability"
+                            class="oe_highlight" groups="stock.group_stock_user"
+                            invisible="operation_state not in ('waiting', 'ready')"/>
+                    <button name="button_validate" type="object" string="Validate"
+                            class="oe_highlight" groups="stock.group_stock_user"
+                            invisible="operation_state != 'ready'"/>
+                    <button name="do_unreserve" type="object" string="Unreserve"
+                            groups="stock.group_stock_user"
+                            invisible="operation_state not in ('waiting', 'ready')"/>
+                    <button name="action_cancel" type="object" string="Cancel"
+                            groups="stock.group_stock_user"
+                            invisible="operation_state in ('done', 'cancelled')"/>
+                    <field name="operation_state" widget="statusbar"
+                           statusbar_visible="draft,waiting,ready,done"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" readonly="1"/>
+                        </h1>
+                    </div>
+                    <div class="alert alert-info" role="alert"
+                         invisible="not internal_is_cross_warehouse">
+                        <strong>Warehouse to warehouse transfer.</strong>
+                        The products leave the source warehouse and are received in
+                        the destination warehouse, so the total quantity on hand
+                        stays unchanged.
+                    </div>
+                    <div class="alert alert-warning" role="alert"
+                         invisible="internal_source_available_qty &gt;= operation_demand_qty or operation_demand_qty &lt;= 0">
+                        <strong>Not enough stock available at the source location.</strong>
+                        Review the availability below, or replenish the source
+                        location before validating this transfer.
+                    </div>
+                    <group>
+                        <group name="transfer_route" string="Transfer">
+                            <field name="location_id"
+                                   options="{'no_create': True}"/>
+                            <field name="location_dest_id"
+                                   options="{'no_create': True}"/>
+                            <field name="internal_source_warehouse_id" readonly="1"/>
+                            <field name="internal_dest_warehouse_id" readonly="1"/>
+                            <field name="internal_is_cross_warehouse" invisible="1"/>
+                        </group>
+                        <group name="transfer_scheduling" string="Scheduling">
+                            <field name="picking_type_id"
+                                   options="{'no_create': True}"/>
+                            <field name="origin" placeholder="e.g. Replenishment"/>
+                            <field name="scheduled_date"/>
+                            <field name="date_done" readonly="1"
+                                   invisible="operation_state != 'done'"/>
+                            <field name="company_id" readonly="1"
+                                   groups="base.group_multi_company"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group name="transfer_availability" string="Availability at Source">
+                            <field name="internal_source_available_qty" readonly="1"/>
+                            <field name="operation_demand_qty" readonly="1"/>
+                            <field name="operation_done_qty" readonly="1"/>
+                            <field name="operation_progress" widget="progressbar"/>
+                        </group>
+                        <group name="transfer_status" string="StockSense Status">
+                            <field name="operation_state" widget="badge"
+                                   decoration-muted="operation_state == 'draft'"
+                                   decoration-warning="operation_state == 'waiting'"
+                                   decoration-info="operation_state == 'ready'"
+                                   decoration-success="operation_state == 'done'"
+                                   decoration-danger="operation_state == 'cancelled'"/>
+                            <field name="operation_is_late"/>
+                            <field name="operation_delay_days"/>
+                            <field name="operation_stock_impact" readonly="1"/>
+                            <field name="operation_move_count" readonly="1"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Products" name="products">
+                            <div class="text-muted mb-2">
+                                Demand and processed quantities are shown read-only.
+                                Use Inventory &gt; Transfers to edit them.
+                            </div>
+                            <field name="move_ids" readonly="1">
+                                <tree string="Stock Moves">
+                                    <field name="product_id"/>
+                                    <field name="description_picking" optional="hide"/>
+                                    <field name="product_uom_qty" string="Demand"/>
+                                    <field name="operation_done_qty" string="Processed"/>
+                                    <field name="location_id" optional="hide"/>
+                                    <field name="location_dest_id" optional="hide"/>
+                                </tree>
+                            </field>
+                        </page>
+                        <page string="Detailed Operations" name="detailed_operations">
+                            <field name="move_line_ids" readonly="1">
+                                <tree string="Detailed Operations">
+                                    <field name="product_id"/>
+                                    <field name="lot_id" optional="show"/>
+                                    <field name="location_id"/>
+                                    <field name="location_dest_id"/>
+                                    <field name="operation_done_qty"/>
+                                    <field name="product_uom_id" groups="uom.group_uom"/>
+                                </tree>
+                            </field>
+                        </page>
+                    </notebook>
+                    <div class="oe_chatter">
+                        <field name="message_follower_ids"/>
+                        <field name="activity_ids"/>
+                        <field name="message_ids"/>
+                    </div>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_internal_transfer_search" model="ir.ui.view">
+        <field name="name">stock.picking.internal.transfer.search</field>
+        <field name="model">stock.picking</field>
+        <field name="arch" type="xml">
+            <search string="Internal Transfers">
+                <field name="name" string="Transfer"/>
+                <field name="location_id" string="From"/>
+                <field name="location_dest_id" string="To"/>
+                <field name="internal_source_warehouse_id" string="Source Warehouse"/>
+                <field name="internal_dest_warehouse_id" string="Destination Warehouse"/>
+                <field name="picking_type_id" string="Operation Type (Detailed)"/>
+                <field name="origin" string="Document"/>
+                <separator/>
+                <filter name="internal_to_process" string="To Process"
+                        domain="[('operation_state', 'not in', ('done', 'cancelled'))]"/>
+                <filter name="internal_waiting" string="Waiting"
+                        domain="[('operation_state', '=', 'waiting')]"/>
+                <filter name="internal_ready" string="Ready"
+                        domain="[('operation_state', '=', 'ready')]"/>
+                <filter name="internal_done" string="Done"
+                        domain="[('operation_state', '=', 'done')]"/>
+                <filter name="internal_cross_warehouse" string="Warehouse to Warehouse"
+                        domain="[('internal_is_cross_warehouse', '=', True)]"/>
+                <filter name="internal_within_warehouse" string="Within a Warehouse"
+                        domain="[('internal_is_cross_warehouse', '=', False)]"/>
+                <filter name="internal_overdue" string="Overdue"
+                        domain="[('operation_state', 'not in', ('done', 'cancelled')), ('scheduled_date', '&lt;', context_today().strftime('%Y-%m-%d'))]"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_internal_source_warehouse"
+                            string="Source Warehouse"
+                            context="{'group_by': 'internal_source_warehouse_id'}"/>
+                    <filter name="group_internal_dest_warehouse"
+                            string="Destination Warehouse"
+                            context="{'group_by': 'internal_dest_warehouse_id'}"/>
+                    <filter name="group_internal_source_location" string="From"
+                            context="{'group_by': 'location_id'}"/>
+                    <filter name="group_internal_dest_location" string="To"
+                            context="{'group_by': 'location_dest_id'}"/>
+                    <filter name="group_internal_operation_state" string="Operation Status"
+                            context="{'group_by': 'operation_state'}"/>
+                    <filter name="group_internal_scheduled_date" string="Scheduled Date"
+                            context="{'group_by': 'scheduled_date'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_internal_transfer_all" model="ir.actions.act_window">
+        <field name="name">Internal Transfers</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">tree,form</field>
+        <field name="domain">[('operation_type', '=', 'internal')]</field>
+        <field name="search_view_id" ref="view_internal_transfer_search"/>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'tree', 'view_id': ref('view_internal_transfer_tree')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('view_internal_transfer_form')})]"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No internal transfer found.</p>
+            <p>Internal transfers move products from one stock location to
+               another (within the same warehouse or between two warehouses)
+               without changing the total quantity on hand.</p>
+        </field>
+    </record>
+
+    <record id="action_internal_transfer_cross_warehouse" model="ir.actions.act_window">
+        <field name="name">Warehouse to Warehouse Transfers</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">tree,form</field>
+        <field name="domain">[('operation_type', '=', 'internal'), ('internal_is_cross_warehouse', '=', True)]</field>
+        <field name="search_view_id" ref="view_internal_transfer_search"/>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'tree', 'view_id': ref('view_internal_transfer_tree')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('view_internal_transfer_form')})]"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No warehouse to warehouse transfer found.</p>
+        </field>
+    </record>
+
+    <menuitem id="menu_internal_transfer_all"
+              name="Internal Transfers"
+              parent="menu_stock_operations_root"
+              action="action_internal_transfer_all"
+              sequence="40"/>
+    <menuitem id="menu_internal_transfer_cross_warehouse"
+              name="Warehouse to Warehouse"
+              parent="menu_stock_operations_root"
+              action="action_internal_transfer_cross_warehouse"
+              sequence="45"/>
+
+</odoo>
+
