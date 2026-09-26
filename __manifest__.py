@@ -85,6 +85,8 @@ Technical notes
         'views/product_views.xml',
         'views/reorder_rule_views.xml',
         'views/stock_operation_views.xml',
+        'views/internal_transfer_views.xml',
+        'views/move_history_views.xml',
         'views/stock_adjustment_views.xml',
         'views/dashboard_views.xml',
         'views/stock_search_views.xml',
