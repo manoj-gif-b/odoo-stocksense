@@ -1,0 +1,298 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Part of StockSense. See LICENSE file for full copyright and licensing details. -->
+<odoo>
+
+    <!-- ================================================================== -->
+    <!-- Stock Operations: list view (receipts, deliveries, internal moves)  -->
+    <!-- ================================================================== -->
+    <record id="view_stock_operation_tree" model="ir.ui.view">
+        <field name="name">stock.operation.tree</field>
+        <field name="model">stock.picking</field>
+        <field name="arch" type="xml">
+            <tree string="Stock Operations"
+                  create="false"
+                  default_order="scheduled_date desc, id desc"
+                  decoration-danger="operation_is_late and operation_state not in ('done', 'cancelled')"
+                  decoration-warning="operation_state == 'waiting'"
+                  decoration-muted="operation_state in ('done', 'cancelled')">
+                <field name="name"/>
+                <field name="operation_state" widget="badge"
+                       decoration-muted="operation_state == 'draft'"
+                       decoration-warning="operation_state == 'waiting'"
+                       decoration-info="operation_state == 'ready'"
+                       decoration-success="operation_state == 'done'"
+                       decoration-danger="operation_state == 'cancelled'"/>
+                <field name="operation_type"/>
+                <field name="partner_id"/>
+                <field name="picking_type_id" optional="hide"/>
+                <field name="origin" optional="hide"/>
+                <field name="scheduled_date"/>
+                <field name="location_id" optional="show"/>
+                <field name="location_dest_id" optional="show"/>
+                <field name="operation_move_count" optional="hide"/>
+                <field name="operation_demand_qty" optional="hide"/>
+                <field name="operation_done_qty" optional="hide"/>
+                <field name="operation_progress" widget="progressbar" optional="show"/>
+                <field name="operation_delay_days" optional="hide"/>
+                <field name="operation_is_late" optional="hide"/>
+                <field name="state" optional="hide"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- ================================================================== -->
+    <!-- Stock Operations: form view                                         -->
+    <!-- ================================================================== -->
+    <record id="view_stock_operation_form" model="ir.ui.view">
+        <field name="name">stock.operation.form</field>
+        <field name="model">stock.picking</field>
+        <field name="arch" type="xml">
+            <form string="Stock Operation">
+                <header>
+                    <button name="action_confirm" type="object" string="Mark as Todo"
+                            class="oe_highlight" groups="stock.group_stock_user"
+                            invisible="operation_state != 'draft'"/>
+                    <button name="action_assign" type="object" string="Check Availability"
+                            class="oe_highlight" groups="stock.group_stock_user"
+                            invisible="operation_state not in ('waiting', 'ready')"/>
+                    <button name="button_validate" type="object" string="Validate"
+                            class="oe_highlight" groups="stock.group_stock_user"
+                            invisible="operation_state != 'ready'"/>
+                    <button name="do_unreserve" type="object" string="Unreserve"
+                            groups="stock.group_stock_user"
+                            invisible="operation_state not in ('waiting', 'ready')"/>
+                    <button name="action_cancel" type="object" string="Cancel"
+                            groups="stock.group_stock_user"
+                            invisible="operation_state in ('done', 'cancelled')"/>
+                    <!-- Display only: the 'clickable' option is voluntarily left
+                         out, this field is computed and must not be written. -->
+                    <field name="operation_state" widget="statusbar"
+                           statusbar_visible="draft,waiting,ready,done"/>
+                    <field name="state" invisible="1"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" readonly="1"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group name="operation_header" string="Operation">
+                            <field name="operation_type" readonly="1"/>
+                            <field name="picking_type_id"/>
+                            <field name="partner_id"/>
+                            <field name="origin" placeholder="e.g. PO00042"/>
+                            <field name="scheduled_date"/>
+                            <field name="date_done" readonly="1"
+                                   invisible="operation_state != 'done'"/>
+                            <field name="company_id" readonly="1"
+                                   groups="base.group_multi_company"/>
+                        </group>
+                        <group name="operation_status" string="StockSense Status">
+                            <field name="operation_state" widget="badge"
+                                   decoration-muted="operation_state == 'draft'"
+                                   decoration-warning="operation_state == 'waiting'"
+                                   decoration-info="operation_state == 'ready'"
+                                   decoration-success="operation_state == 'done'"
+                                   decoration-danger="operation_state == 'cancelled'"/>
+                            <field name="operation_is_late"/>
+                            <field name="operation_delay_days"/>
+                            <field name="operation_progress" widget="progressbar"/>
+                            <field name="operation_move_count"/>
+                            <field name="operation_demand_qty"/>
+                            <field name="operation_done_qty"/>
+                        </group>
+                    </group>
+
+                    <group>
+                        <group name="operation_locations" string="Locations">
+                            <field name="location_id"/>
+                            <field name="location_dest_id"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Products" name="products">
+                            <div class="text-muted mb-2">
+                                Demand and processed quantities are shown read-only.
+                                Use Inventory &gt; Transfers to edit them.
+                            </div>
+                            <field name="move_ids" readonly="1">
+                                <tree string="Stock Moves">
+                                    <field name="product_id"/>
+                                    <field name="description_picking" optional="hide"/>
+                                    <field name="product_uom_qty" string="Demand"/>
+                                    <field name="quantity" string="Processed"/>
+                                    <field name="location_id" optional="hide"/>
+                                    <field name="location_dest_id" optional="hide"/>
+                                    <field name="state" optional="hide"/>
+                                </tree>
+                            </field>
+                        </page>
+                        <page string="Detailed Operations" name="detailed_operations">
+                            <field name="move_line_ids" readonly="1">
+                                <tree string="Detailed Operations">
+                                    <field name="product_id"/>
+                                    <field name="lot_id" optional="show"/>
+                                    <field name="location_id"/>
+                                    <field name="location_dest_id"/>
+                                    <field name="quantity"/>
+                                    <field name="product_uom_id" groups="uom.group_uom"/>
+                                    <field name="picked" optional="hide"/>
+                                </tree>
+                            </field>
+                        </page>
+                    </notebook>
+                    <div class="oe_chatter">
+                        <field name="message_follower_ids"/>
+                        <field name="activity_ids"/>
+                        <field name="message_ids"/>
+                    </div>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- ================================================================== -->
+    <!-- Stock Operations: search view                                       -->
+    <!-- ================================================================== -->
+    <record id="view_stock_operation_search" model="ir.ui.view">
+        <field name="name">stock.operation.search</field>
+        <field name="model">stock.picking</field>
+        <field name="arch" type="xml">
+            <search string="Stock Operations">
+                <field name="name" string="Operation"/>
+                <field name="partner_id"/>
+                <field name="origin" string="Document"/>
+                <field name="picking_type_id" string="Operation Type (Detailed)"/>
+                <field name="location_id"/>
+                <separator/>
+                <filter name="operation_to_process" string="To Process"
+                        domain="[('operation_state', 'not in', ('done', 'cancelled'))]"/>
+                <filter name="operation_draft" string="Draft"
+                        domain="[('operation_state', '=', 'draft')]"/>
+                <filter name="operation_waiting" string="Waiting"
+                        domain="[('operation_state', '=', 'waiting')]"/>
+                <filter name="operation_ready" string="Ready"
+                        domain="[('operation_state', '=', 'ready')]"/>
+                <filter name="operation_done" string="Done"
+                        domain="[('operation_state', '=', 'done')]"/>
+                <filter name="operation_cancelled" string="Cancelled"
+                        domain="[('operation_state', '=', 'cancelled')]"/>
+                <separator/>
+                <filter name="operation_overdue" string="Overdue"
+                        domain="[('operation_state', 'not in', ('done', 'cancelled')), ('scheduled_date', '&lt;', context_today().strftime('%Y-%m-%d'))]"/>
+                <separator/>
+                <filter name="operation_receipt" string="Receipts"
+                        domain="[('operation_type', '=', 'receipt')]"/>
+                <filter name="operation_delivery" string="Deliveries"
+                        domain="[('operation_type', '=', 'delivery')]"/>
+                <filter name="operation_internal" string="Internal Transfers"
+                        domain="[('operation_type', '=', 'internal')]"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_operation_state" string="Operation Status"
+                            context="{'group_by': 'operation_state'}"/>
+                    <filter name="group_operation_type" string="Operation Type"
+                            context="{'group_by': 'operation_type'}"/>
+                    <filter name="group_picking_type" string="Detailed Operation Type"
+                            context="{'group_by': 'picking_type_id'}"/>
+                    <filter name="group_partner" string="Contact"
+                            context="{'group_by': 'partner_id'}"/>
+                    <filter name="group_scheduled_date" string="Scheduled Date"
+                            context="{'group_by': 'scheduled_date'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- ================================================================== -->
+    <!-- Actions: one per StockSense operation type                          -->
+    <!-- ================================================================== -->
+    <record id="action_stock_operation_all" model="ir.actions.act_window">
+        <field name="name">All Operations</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">tree,form</field>
+        <field name="domain">[('operation_type', 'in', ('receipt', 'delivery', 'internal'))]</field>
+        <field name="search_view_id" ref="view_stock_operation_search"/>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'tree', 'view_id': ref('view_stock_operation_tree')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('view_stock_operation_form')})]"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No stock operation found.</p>
+            <p>Receipts, deliveries and internal transfers are listed here with
+               their StockSense status badge and progress.</p>
+        </field>
+    </record>
+
+    <record id="action_stock_operation_receipt" model="ir.actions.act_window">
+        <field name="name">Receipts</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">tree,form</field>
+        <field name="domain">[('operation_type', '=', 'receipt')]</field>
+        <field name="search_view_id" ref="view_stock_operation_search"/>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'tree', 'view_id': ref('view_stock_operation_tree')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('view_stock_operation_form')})]"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No receipt found.</p>
+        </field>
+    </record>
+
+    <record id="action_stock_operation_delivery" model="ir.actions.act_window">
+        <field name="name">Deliveries</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">tree,form</field>
+        <field name="domain">[('operation_type', '=', 'delivery')]</field>
+        <field name="search_view_id" ref="view_stock_operation_search"/>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'tree', 'view_id': ref('view_stock_operation_tree')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('view_stock_operation_form')})]"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No delivery found.</p>
+        </field>
+    </record>
+
+    <record id="action_stock_operation_internal" model="ir.actions.act_window">
+        <field name="name">Internal Transfers</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">tree,form</field>
+        <field name="domain">[('operation_type', '=', 'internal')]</field>
+        <field name="search_view_id" ref="view_stock_operation_search"/>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'tree', 'view_id': ref('view_stock_operation_tree')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('view_stock_operation_form')})]"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No internal transfer found.</p>
+        </field>
+    </record>
+
+    <!-- ================================================================== -->
+    <!-- Menus: Inventory > Stock Operations                                 -->
+    <!-- ================================================================== -->
+    <menuitem id="menu_stock_operations_root"
+              name="Stock Operations"
+              parent="stock.menu_stock_root"
+              sequence="3"
+              groups="stock.group_stock_user"/>
+
+    <menuitem id="menu_stock_operation_all"
+              name="All Operations"
+              parent="menu_stock_operations_root"
+              action="action_stock_operation_all"
+              sequence="10"/>
+    <menuitem id="menu_stock_operation_receipt"
+              name="Receipts"
+              parent="menu_stock_operations_root"
+              action="action_stock_operation_receipt"
+              sequence="20"/>
+    <menuitem id="menu_stock_operation_delivery"
+              name="Deliveries"
+              parent="menu_stock_operations_root"
+              action="action_stock_operation_delivery"
+              sequence="30"/>
+    <menuitem id="menu_stock_operation_internal"
+              name="Internal Transfers"
+              parent="menu_stock_operations_root"
+              action="action_stock_operation_internal"
+              sequence="40"/>
+
+</odoo>
