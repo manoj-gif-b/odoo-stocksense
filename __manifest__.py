@@ -3,8 +3,9 @@
     'name': 'StockSense Core',
     'version': '17.0.1.0.0',
     'category': 'Inventory/Inventory',
-    'summary': 'StockSense inventory foundations: product SKU, reorder rules, '
-               'initial stock and stock operations.',
+    'summary': 'StockSense inventory foundations: products, reorder rules, '
+               'initial stock, stock operations, dashboard, adjustments and '
+               'low stock alerts.',
     'description': """
 StockSense Core
 ===============
@@ -33,6 +34,23 @@ Features
   lateness flags, plus a dedicated menu under Inventory and a
   ``get_operation_state_summary`` helper for dashboards. The native transfer
   workflow is reused untouched.
+* **Dashboard** (merged from *StockSense - Dashboard & Adjustments*): a
+  ``stocksense.dashboard`` cockpit with four KPIs (Total Products, Low Stock,
+  Pending Receipts, Pending Deliveries), each one opening the matching records.
+* **Inventory Adjustments**: multi-line ``stock.adjustment`` documents applied
+  through ``stock.quant``, so valuation, stock moves and traceability stay
+  intact.
+* **Low stock alerts** - two complementary scheduled actions, both running as
+  superuser and both kept on purpose:
+  * hourly (``data/ir_cron_data.xml`` -> ``ir_cron_stocksense_low_stock``):
+    compares the quantity on hand of every active reordering rule with its
+    minimum, then sends a sticky in-app notification to the Inventory Managers
+    and always writes a warning line in the server log (immediate visibility);
+  * daily (``data/ir_cron_dashboard_data.xml`` -> ``ir_cron_low_stock_alerts``):
+    emails one summary per company to the Inventory Managers and keeps a single
+    open warning activity per low stock product (durable, deduplicated trail).
+    Disable one of the two jobs in *Settings > Technical > Scheduled Actions* if
+    a single alerting channel is preferred.
 
 Technical notes
 ---------------
@@ -46,15 +64,22 @@ Technical notes
     'license': 'LGPL-3',
     'depends': [
         'stock',
+        'mail',
         'auth_signup',
     ],
     'data': [
         'security/ir.model.access.csv',
+        'security/dashboard_adjustment_access.csv',
         'security/stocksense_security.xml',
+        'data/ir_cron_data.xml',
+        'data/ir_cron_dashboard_data.xml',
+        'data/stock_adjustment_data.xml',
         'views/product_views.xml',
         'views/reorder_rule_views.xml',
         'views/stock_operation_views.xml',
         'views/internal_transfer_views.xml',
+        'views/stock_adjustment_views.xml',
+        'views/dashboard_views.xml',
         'views/menu.xml',
     ],
     'application': True,

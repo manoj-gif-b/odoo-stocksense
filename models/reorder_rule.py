@@ -14,9 +14,21 @@ opened directly from the product form.
 ``product.template`` (inherited)
     * ``ss_orderpoint_count`` and ``action_ss_open_orderpoints``: the counter and
       the action behind the stat button of the product form.
+
+``stock.warehouse.orderpoint`` (hourly cron)
+    * ``_ss_cron_notify_low_stock``: scheduled action
+      ``data/ir_cron_data.xml`` warning the Inventory Managers when a product is
+      below the minimum quantity of its reordering rule.
 """
+import logging
+
 from odoo import _, api, fields, models
 from odoo.exceptions import ValidationError
+
+_logger = logging.getLogger(__name__)
+
+#: Maximum number of low stock products listed in one notification.
+_SS_LOW_STOCK_LIST_LIMIT = 10
 
 
 class StockWarehouseOrderpoint(models.Model):
@@ -74,6 +86,87 @@ class StockWarehouseOrderpoint(models.Model):
                     "The maximum quantity of \"%s\" must be greater than or equal "
                     "to its minimum quantity."
                 ) % orderpoint.product_id.display_name)
+
+    # ------------------------------------------------------------------
+    # Low stock alerts (hourly cron - data/ir_cron_data.xml)
+    # ------------------------------------------------------------------
+    @api.model
+    def _ss_get_low_stock_orderpoints(self):
+        """Reordering rules whose product is below the minimum quantity.
+
+        ``qty_on_hand`` is a non-stored compute field (it is computed for the
+        location of the rule), so the comparison is done in Python rather than
+        as a search domain.
+        """
+        orderpoints = self.search([
+            ('active', '=', True),
+            ('product_min_qty', '>', 0.0),
+        ])
+        return orderpoints.filtered(
+            lambda orderpoint: orderpoint.qty_on_hand < orderpoint.product_min_qty)
+
+    @api.model
+    def _ss_get_inventory_managers(self):
+        """Users belonging to the Inventory Manager group."""
+        group = self.env.ref('stock.group_stock_manager', raise_if_not_found=False)
+        if not group:
+            return self.env['res.users']
+        return self.env['res.users'].search([('groups_id', 'in', group.ids)])
+
+    @api.model
+    def _ss_notify_user(self, user, title, message):
+        """Send an in-app (systray) notification to ``user``.
+
+        ``notify_warning`` is the public helper of the notification API; the
+        ``bus.bus`` notification underneath is used as a fallback so the alert is
+        never lost because of a missing helper.
+        """
+        notify_warning = getattr(user, 'notify_warning', None)
+        if notify_warning:
+            notify_warning(message=message, title=title, sticky=True)
+            return True
+        self.env['bus.bus']._sendone(user.partner_id, 'simple_notification', {
+            'type': 'warning',
+            'title': title,
+            'message': message,
+            'sticky': True,
+        })
+        return True
+
+    @api.model
+    def _ss_cron_notify_low_stock(self):
+        """Warn the Inventory Managers about the products below their minimum.
+
+        Entry point of the hourly scheduled action
+        ``stocksense.ir_cron_stocksense_low_stock`` (data/ir_cron_data.xml).
+        Always logs a trace, so the alert is traceable even when no manager is
+        connected to the web client.
+        """
+        orderpoints = self._ss_get_low_stock_orderpoints()
+        if not orderpoints:
+            _logger.info(
+                "StockSense low stock check: no product below its minimum quantity.")
+            return 0
+        lines = [
+            '%s - %s: %s on hand < %s minimum' % (
+                orderpoint.location_id.display_name,
+                orderpoint.product_id.display_name,
+                orderpoint.qty_on_hand,
+                orderpoint.product_min_qty,
+            )
+            for orderpoint in orderpoints[:_SS_LOW_STOCK_LIST_LIMIT]
+        ]
+        remaining = len(orderpoints) - _SS_LOW_STOCK_LIST_LIMIT
+        if remaining > 0:
+            lines.append(_('... and %s more product(s).') % remaining)
+        title = _('StockSense: low stock alert')
+        message = '\n'.join(lines)
+        _logger.warning(
+            "StockSense low stock alert: %s reordering rule(s) below the minimum:\n%s",
+            len(orderpoints), message)
+        for manager in self._ss_get_inventory_managers():
+            self._ss_notify_user(manager, title, message)
+        return len(orderpoints)
 
 
 class ProductTemplate(models.Model):

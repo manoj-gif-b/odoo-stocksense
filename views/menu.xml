@@ -49,4 +49,21 @@
         sequence="30"
         groups="stock.group_stock_manager"/>
 
+    <!-- Merged from the "Dashboard & Adjustments" module. Their sequences are
+         adapted (5 / 25) so that every StockSense sub-menu keeps a single,
+         distinct position. -->
+    <menuitem id="menu_stocksense_dashboard"
+        name="Dashboard"
+        parent="menu_stocksense_root"
+        action="action_stocksense_dashboard"
+        sequence="5"
+        groups="stock.group_stock_user"/>
+
+    <menuitem id="menu_stock_adjustment"
+        name="Inventory Adjustments"
+        parent="menu_stocksense_root"
+        action="action_stock_adjustment"
+        sequence="25"
+        groups="stock.group_stock_user"/>
+
 </odoo>

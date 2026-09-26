@@ -63,10 +63,5 @@
         <field name="target">current</field>
     </record>
 
-    <menuitem id="menu_stocksense_dashboard"
-              name="Dashboard"
-              parent="menu_stocksense_root"
-              action="action_stocksense_dashboard"
-              groups="stock.group_stock_user"
-              sequence="10"/>
+    <!-- The menu of this action is declared in views/menu.xml. -->
 </odoo>

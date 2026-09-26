@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ==================================================================
+         StockSense - hourly low stock alert.
+
+         The scheduled action inspects every active reordering rule
+         (stock.warehouse.orderpoint) and warns the Inventory Managers when the
+         quantity on hand of the rule location is below its minimum quantity.
+
+         The business logic lives in the model
+         (models/reorder_rule.py::_ss_cron_notify_low_stock) so that it can be
+         called from a test, an action or the shell as well.
+
+         noupdate="1": administrators may change the interval or disable the
+         cron, an upgrade of the module will not overwrite their choice.
+
+         numbercall = -1 (no limit): Odoo 17 defaults this field to 1, which
+         would make the job run only once.
+         ================================================================== -->
+
+    <data noupdate="1">
+
+        <record id="ir_cron_stocksense_low_stock" model="ir.cron">
+            <field name="name">StockSense: Low stock alerts (hourly)</field>
+            <field name="model_id" ref="stock.model_stock_warehouse_orderpoint"/>
+            <field name="state">code</field>
+            <field name="code">model._ss_cron_notify_low_stock()</field>
+            <field name="user_id" ref="base.user_root"/>
+            <field name="interval_number">1</field>
+            <field name="interval_type">hours</field>
+            <field name="numbercall">-1</field>
+            <field name="active" eval="True"/>
+        </record>
+
+    </data>
+
+</odoo>
