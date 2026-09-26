@@ -135,18 +135,7 @@
         </field>
     </record>
 
-    <!-- Root menu of the app. It is declared in this file because this file is
-         loaded before dashboard_views.xml, which attaches the Dashboard item
-         to it. -->
-    <menuitem id="menu_stocksense_root"
-              name="StockSense"
-              sequence="15"
-              groups="stock.group_stock_user"/>
+    <!-- The StockSense menus (root, Dashboard and Inventory Adjustments) are all
+         declared in views/menu.xml, which is loaded last. -->
 
-    <menuitem id="menu_stock_adjustment"
-              name="Inventory Adjustments"
-              parent="menu_stocksense_root"
-              action="action_stock_adjustment"
-              groups="stock.group_stock_user"
-              sequence="20"/>
 </odoo>
