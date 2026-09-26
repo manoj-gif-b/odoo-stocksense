@@ -74,6 +74,8 @@ Technical notes
         'data/ir_cron_data.xml',
         'data/ir_cron_dashboard_data.xml',
         'data/stock_adjustment_data.xml',
+        'reports/stock_report.xml',
+        'views/barcode_scanner_views.xml',
         'views/product_views.xml',
         'views/reorder_rule_views.xml',
         'views/stock_operation_views.xml',

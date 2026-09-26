@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ==================================================================
+         StockSense - barcode scanning screen.
+
+         The barcode field is the first field of the form and carries
+         `autofocus`: a USB / Bluetooth scanner behaves as a keyboard that types
+         the code and sends Enter, then the primary button `action_scan`
+         dispatches the scan (product form redirect, or a new line on the
+         selected receipt / delivery).
+         ================================================================== -->
+
+    <record id="view_stocksense_barcode_scanner_form" model="ir.ui.view">
+        <field name="name">stocksense.barcode.scanner.form</field>
+        <field name="model">stocksense.barcode.scanner</field>
+        <field name="arch" type="xml">
+            <form string="Barcode Scanner">
+                <header>
+                    <button name="action_scan" type="object" string="Scan"
+                        class="oe_highlight"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>Barcode Scanner</h1>
+                    </div>
+                    <group>
+                        <group name="ss_scan" string="Scan">
+                            <field name="barcode" autofocus="autofocus"
+                                placeholder="Scan a barcode, then press Enter"/>
+                            <field name="target" widget="radio"/>
+                            <field name="picking_id" options="{'no_create': True}"
+                                invisible="target == 'product'"/>
+                            <field name="quantity" invisible="target == 'product'"/>
+                        </group>
+                        <group name="ss_result" string="Result">
+                            <field name="product_id"/>
+                            <field name="scanned_count"/>
+                            <field name="last_message"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_stocksense_barcode_scanner" model="ir.actions.act_window">
+        <field name="name">Barcode Scanner</field>
+        <field name="res_model">stocksense.barcode.scanner</field>
+        <field name="view_mode">form</field>
+        <field name="target">current</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Scan a barcode</p>
+            <p>
+                Scan into <em>Product</em> to open the product form, or into a
+                <em>Receipt</em> / <em>Delivery</em> to add the scanned product
+                as a new line of that operation.
+            </p>
+        </field>
+    </record>
+
+</odoo>

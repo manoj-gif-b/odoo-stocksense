@@ -3,3 +3,5 @@ access_stocksense_reorder_rule_manager,stocksense.reorder.rule inventory manager
 access_stocksense_reorder_rule_user,stocksense.reorder.rule warehouse staff,model_stocksense_reorder_rule,stock.group_stock_user,1,1,1,0
 access_stocksense_reorder_rule_employee,stocksense.reorder.rule read only,model_stocksense_reorder_rule,base.group_user,1,0,0,0
 access_stocksense_orderpoint_staff,stock.warehouse.orderpoint warehouse staff,stock.model_stock_warehouse_orderpoint,stock.group_stock_user,1,1,1,0
+access_stocksense_barcode_scanner_user,stocksense.barcode.scanner warehouse staff,model_stocksense_barcode_scanner,stock.group_stock_user,1,1,1,1
+access_stocksense_barcode_scanner_manager,stocksense.barcode.scanner inventory manager,model_stocksense_barcode_scanner,stock.group_stock_manager,1,1,1,1
