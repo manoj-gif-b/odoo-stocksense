@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Part of StockSense. See LICENSE file for full copyright and licensing details. -->
+<odoo>
+
+    <!-- ==================================================================
+         Export to Excel / CSV - export-ready lists and export wizard.
+
+         The native *Export* action of Odoo (CSV / Excel) works on the list
+         view the user is looking at: it exports the records of the current
+         search domain and offers the fields of the model. StockSense therefore:
+
+         * completes its own lists (products, move history) with every column an
+           inventory report needs - kept as ``optional="hide"``, so the daily
+           screens stay readable while the columns are one click (and one
+           export) away;
+         * adds a free *Period* filter to the movement ledger, so the date range
+           of the export is picked in the search bar;
+         * gives the dashboard figures a list view, which the cockpit (a form
+           view) did not have: the KPI rows can now be exported natively;
+         * adds the *Export Stock Movements to CSV* wizard
+           (``wizard/export_wizard.py``) for the ready-made, movement oriented
+           report.
+         ================================================================== -->
+
+    <!-- ================================================================== -->
+    <!-- Products (product.template)                                         -->
+    <!-- ================================================================== -->
+    <record id="view_stocksense_product_template_export_tree" model="ir.ui.view">
+        <field name="name">stocksense.product.template.export.tree</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="view_stocksense_product_template_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//tree" position="inside">
+                <!-- Export columns: hidden by default, still proposed by the
+                     export dialog and by the optional columns menu. -->
+                <field name="barcode" optional="hide"/>
+                <field name="virtual_available" optional="hide"
+                       groups="stock.group_stock_user"/>
+                <field name="ss_reorder_rule_count" optional="hide"/>
+                <field name="ss_initial_stock" optional="hide"/>
+                <field name="ss_initial_stock_applied" optional="hide"/>
+                <field name="ss_initial_location_id" optional="hide"
+                       groups="stock.group_stock_multi_locations"/>
+                <field name="active" optional="hide"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- ================================================================== -->
+    <!-- Move history (stock.move)                                           -->
+    <!-- ================================================================== -->
+    <record id="view_stock_move_history_export_tree" model="ir.ui.view">
+        <field name="name">stock.move.history.export.tree</field>
+        <field name="model">stock.move</field>
+        <field name="inherit_id" ref="view_stock_move_history_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//tree" position="inside">
+                <field name="create_date" optional="hide"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_stock_move_history_export_search" model="ir.ui.view">
+        <field name="name">stock.move.history.export.search</field>
+        <field name="model">stock.move</field>
+        <field name="inherit_id" ref="view_stock_move_history_search"/>
+        <field name="arch" type="xml">
+            <!-- Free date range: the native export then covers exactly the
+                 period selected in the search bar. -->
+            <xpath expr="//search/field[@name='operation_type']" position="after">
+                <field name="date"/>
+            </xpath>
+            <xpath expr="//search/filter[@name='history_this_month']" position="after">
+                <filter name="history_period" string="Period" date="date"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- ================================================================== -->
+    <!-- Dashboard data (stocksense.dashboard)                               -->
+    <!-- ================================================================== -->
+    <record id="view_stocksense_dashboard_tree" model="ir.ui.view">
+        <field name="name">stocksense.dashboard.tree</field>
+        <field name="model">stocksense.dashboard</field>
+        <field name="arch" type="xml">
+            <!-- The KPI rows as a list: the native Export action of this list
+                 produces the CSV / Excel extract of the dashboard figures. -->
+            <tree string="Dashboard Data" create="false" edit="false" delete="false">
+                <field name="company_id" groups="base.group_multi_company"/>
+                <field name="today"/>
+                <field name="total_products"/>
+                <field name="low_stock_count"
+                       decoration-danger="low_stock_count &gt; 0"/>
+                <field name="pending_receipts_count"/>
+                <field name="pending_deliveries_count"/>
+                <field name="create_uid" optional="hide"/>
+                <field name="create_date" optional="hide"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- The cockpit is a form view: it shows the figures on a virtual record
+         that is never saved, so there is nothing to list - and therefore
+         nothing to export. This action snapshots the KPIs of the current
+         company on a transient record and opens the list on that snapshot,
+         which the native Export action can then download. -->
+    <record id="action_stocksense_dashboard_data" model="ir.actions.server">
+        <field name="name">Dashboard Data</field>
+        <field name="model_id" ref="model_stocksense_dashboard"/>
+        <field name="groups_id" eval="[(4, ref('stock.group_stock_user'))]"/>
+        <field name="state">code</field>
+        <field name="code">
+# The KPI fields are computed on read and never stored: reading the record
+# created below is enough to get the fresh figures of the current company.
+dashboard = model.create({})
+action = {
+    'type': 'ir.actions.act_window',
+    'name': 'Dashboard Data',
+    'res_model': 'stocksense.dashboard',
+    'view_mode': 'tree',
+    'domain': [('id', '=', dashboard.id)],
+    'target': 'current',
+}
+        </field>
+    </record>
+
+    <!-- ================================================================== -->
+    <!-- Export wizard (stocksense.export.wizard)                            -->
+    <!-- ================================================================== -->
+    <record id="view_stocksense_export_wizard_form" model="ir.ui.view">
+        <field name="name">stocksense.export.wizard.form</field>
+        <field name="model">stocksense.export.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Export Stock Movements">
+                <group>
+                    <group name="ss_period" string="Period">
+                        <field name="date_from"/>
+                        <field name="date_to"/>
+                    </group>
+                    <group name="ss_scope" string="Scope">
+                        <field name="operation_type"/>
+                        <field name="state"/>
+                        <field name="company_id"
+                               groups="base.group_multi_company"
+                               options="{'no_create': True}"/>
+                    </group>
+                </group>
+                <group name="ss_filters" string="Filters">
+                    <group name="ss_product_filters">
+                        <field name="product_id"
+                               options="{'no_create': True}"/>
+                        <field name="product_categ_id"
+                               options="{'no_create': True}"/>
+                    </group>
+                    <group name="ss_location_filters">
+                        <field name="location_id"
+                               options="{'no_create': True}"/>
+                        <field name="location_dest_id"
+                               options="{'no_create': True}"/>
+                    </group>
+                </group>
+                <!-- Filled when the wizard is opened from a selection of the
+                     Move History list. -->
+                <field name="move_ids" widget="many2many_tags" readonly="1"
+                       invisible="not move_ids"/>
+                <group name="ss_result" string="Last Export"
+                       invisible="not line_count">
+                    <field name="line_count"/>
+                    <field name="file_name"/>
+                    <field name="file_data" filename="file_name" nolabel="1"/>
+                </group>
+                <footer>
+                    <button name="action_export" type="object"
+                            string="Export to CSV" class="btn-primary"
+                            data-hotkey="q"/>
+                    <button special="cancel" string="Close"
+                            class="btn-secondary" data-hotkey="x"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_stocksense_export_wizard" model="ir.actions.act_window">
+        <field name="name">Export Stock Movements to CSV</field>
+        <field name="res_model">stocksense.export.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="view_stocksense_export_wizard_form"/>
+        <field name="target">new</field>
+    </record>
+
+    <!-- Same wizard, reachable from the Actions menu of any stock.move list
+         (Move History included) and pre-filtered on the selected movements. -->
+    <record id="action_stocksense_export_selected_moves" model="ir.actions.server">
+        <field name="name">Export to CSV</field>
+        <field name="model_id" ref="stock.model_stock_move"/>
+        <field name="binding_model_id" ref="stock.model_stock_move"/>
+        <field name="binding_view_types">list</field>
+        <field name="groups_id" eval="[(4, ref('stock.group_stock_user'))]"/>
+        <field name="state">code</field>
+        <field name="code">
+action = {
+    'type': 'ir.actions.act_window',
+    'name': 'Export Stock Movements to CSV',
+    'res_model': 'stocksense.export.wizard',
+    'view_mode': 'form',
+    'target': 'new',
+    'context': {'default_move_ids': model.env.context.get('active_ids', [])},
+}
+        </field>
+    </record>
+
+    <menuitem id="menu_stocksense_export_moves"
+              name="Export Stock Movements"
+              parent="menu_stock_operations_root"
+              action="action_stocksense_export_wizard"
+              sequence="60"
+              groups="stock.group_stock_user"/>
+
+</odoo>

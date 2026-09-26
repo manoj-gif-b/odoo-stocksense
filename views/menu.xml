@@ -6,8 +6,8 @@
 
          This file is the single source of truth for the menus of the module,
          therefore it has to be loaded last: the menu items reference the
-         actions defined in views/product_views.xml and
-         views/reorder_rule_views.xml.
+         actions defined in views/product_views.xml,
+         views/reorder_rule_views.xml and views/export_templates.xml.
 
          The top level menu is an application (it carries an icon and is listed
          in the Apps switcher). It also has an action, so opening the app lands
@@ -59,11 +59,29 @@
         sequence="5"
         groups="stock.group_stock_user"/>
 
+    <!-- Export to Excel / CSV: the dashboard figures as a list, which the
+         cockpit (a form view) does not provide, so the native Export action can
+         produce their CSV / Excel extract (views/export_templates.xml). -->
+    <menuitem id="menu_stocksense_dashboard_data"
+        name="Dashboard Data"
+        parent="menu_stocksense_dashboard"
+        action="action_stocksense_dashboard_data"
+        sequence="10"
+        groups="stock.group_stock_user"/>
+
     <menuitem id="menu_stock_adjustment"
         name="Inventory Adjustments"
         parent="menu_stocksense_root"
         action="action_stock_adjustment"
         sequence="25"
+        groups="stock.group_stock_user"/>
+
+    <!-- Barcode scanning screen (views/barcode_scanner_views.xml). -->
+    <menuitem id="menu_stocksense_barcode_scanner"
+        name="Barcode Scanner"
+        parent="menu_stocksense_root"
+        action="action_stocksense_barcode_scanner"
+        sequence="1"
         groups="stock.group_stock_user"/>
 
 </odoo>

@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="action_report_stock_valuation" model="ir.actions.report">
+        <field name="name">Stock Valuation</field>
+        <field name="model">stock.warehouse</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">stocksense.stock_valuation_report</field>
+        <field name="report_file">stocksense.stock_valuation_report</field>
+        <field name="print_report_name">'Stock Valuation - %s' % (object.name)</field>
+        <field name="binding_model_id" ref="stock.model_stock_warehouse"/>
+        <field name="binding_type">report</field>
+    </record>
+
+    <template id="stock_valuation_report">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="doc">
+                <t t-set="valuation" t-value="doc._ss_get_valuation_data()"/>
+                <t t-call="web.external_layout">
+                    <div class="page">
+                        <h2>Stock Valuation Report</h2>
+                        <div class="row mt-3 mb-4">
+                            <div class="col-6">
+                                <div><strong>Warehouse:</strong> <span t-out="doc.display_name"/></div>
+                                <div><strong>Company:</strong> <span t-out="doc.company_id.display_name or ''"/></div>
+                                <div><strong>Location:</strong> <span t-out="doc.lot_stock_id.display_name"/></div>
+                            </div>
+                            <div class="col-6 text-end">
+                                <div><strong>Generated on:</strong> <span t-out="valuation['generated_on']"/></div>
+                                <div><strong>Currency:</strong> <span t-out="valuation['currency'].name or ''"/></div>
+                            </div>
+                        </div>
+                        <table class="table table-sm o_main_table">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>SKU/Ref</th>
+                                    <th>Warehouse</th>
+                                    <th class="text-end">Qty</th>
+                                    <th>UoM</th>
+                                    <th class="text-end">Unit Price</th>
+                                    <th class="text-end">Total Value</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="valuation['lines']" t-as="line">
+                                    <tr>
+                                        <td><span t-out="line['product']"/></td>
+                                        <td><span t-out="line['default_code']"/></td>
+                                        <td><span t-out="line['warehouse']"/></td>
+                                        <td class="text-end"><span t-out="line['quantity']" t-options='{"widget": "float"}'/></td>
+                                        <td><span t-out="line['uom']"/></td>
+                                        <td class="text-end"><span t-out="line['unit_price']" t-options='{"widget": "monetary", "display_currency": valuation["currency"]}'/></td>
+                                        <td class="text-end"><span t-out="line['value']" t-options='{"widget": "monetary", "display_currency": valuation["currency"]}'/></td>
+                                    </tr>
+                                </t>
+                                <tr t-if="not valuation['lines']">
+                                    <td colspan="7" class="text-center text-muted">No stock found in this warehouse.</td>
+                                </tr>
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <td colspan="3"><strong>Total</strong></td>
+                                    <td class="text-end"><strong><span t-out="valuation['total_quantity']" t-options='{"widget": "float"}'/></strong></td>
+                                    <td/>
+                                    <td/>
+                                    <td class="text-end"><strong><span t-out="valuation['total_value']" t-options='{"widget": "monetary", "display_currency": valuation["currency"]}'/></strong></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+
+    <record id="view_stocksense_warehouse_form" model="ir.ui.view">
+        <field name="name">stock.warehouse.form.stocksense</field>
+        <field name="model">stock.warehouse</field>
+        <field name="inherit_id" ref="stock.view_warehouse"/>
+        <field name="arch" type="xml">
+            <div name="button_box" position="inside">
+                <button name="%(action_report_stock_valuation)d" type="action"
+                    string="Stock Valuation" icon="fa-print" class="oe_stat_button"
+                    groups="stock.group_stock_user"/>
+            </div>
+        </field>
+    </record>
+</odoo>

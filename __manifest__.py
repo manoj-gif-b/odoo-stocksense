@@ -59,6 +59,13 @@ Features
 * **Profile menu** (``views/profile_menu.xml``): a *My Account* entry in the
   backend sidebar with the *My Profile* (user preferences) and *Logout*
   shortcuts, available to every internal user.
+* **Export to Excel / CSV**: the StockSense lists - products, move history and
+  dashboard data - carry every column an inventory report needs, so the native
+  Odoo *Export* action (CSV / Excel) exports them as-is
+  (``views/export_templates.xml``). On top of it, the
+  *Export Stock Movements to CSV* wizard (``wizard/export_wizard.py``) exports
+  the ``stock.move`` ledger of a period, filtered by document type, status,
+  product, product category and locations.
 
 Technical notes
 ---------------
@@ -82,6 +89,8 @@ Technical notes
         'data/ir_cron_data.xml',
         'data/ir_cron_dashboard_data.xml',
         'data/stock_adjustment_data.xml',
+        'reports/stock_report.xml',
+        'views/barcode_scanner_views.xml',
         'views/product_views.xml',
         'views/reorder_rule_views.xml',
         'views/stock_operation_views.xml',
@@ -91,6 +100,7 @@ Technical notes
         'views/dashboard_views.xml',
         'views/stock_search_views.xml',
         'views/profile_menu.xml',
+        'views/export_templates.xml',
         'views/menu.xml',
     ],
     'application': True,
