@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Part of StockSense. See LICENSE file for full copyright and licensing details. -->
+<odoo>
+
+    <record id="view_stocksense_dashboard_form" model="ir.ui.view">
+        <field name="name">stocksense.dashboard.form</field>
+        <field name="model">stocksense.dashboard</field>
+        <field name="arch" type="xml">
+            <!-- Read-only cockpit: every field is computed, so there is nothing
+                 to save. Each KPI is a stat button opening the matching records. -->
+            <form string="StockSense Dashboard" create="false" edit="false" delete="false">
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_open_products" type="object"
+                                class="oe_stat_button" icon="fa-cubes">
+                            <field name="total_products" widget="statinfo" string="Products"/>
+                        </button>
+                        <button name="action_open_low_stock" type="object"
+                                class="oe_stat_button" icon="fa-exclamation-triangle">
+                            <field name="low_stock_count" widget="statinfo" string="Low Stock"/>
+                        </button>
+                        <button name="action_open_pending_receipts" type="object"
+                                class="oe_stat_button" icon="fa-truck">
+                            <field name="pending_receipts_count" widget="statinfo" string="Receipts"/>
+                        </button>
+                        <button name="action_open_pending_deliveries" type="object"
+                                class="oe_stat_button" icon="fa-arrow-circle-up">
+                            <field name="pending_deliveries_count" widget="statinfo" string="Deliveries"/>
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <h1>Inventory Overview</h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="company_id" readonly="1"
+                                   groups="base.group_multi_company"/>
+                        </group>
+                        <group>
+                            <field name="today"/>
+                        </group>
+                    </group>
+                    <div class="text-muted">
+                        <p>
+                            <strong>Products</strong> counts the storable products of the company.
+                            <strong>Low Stock</strong> counts the active reordering rules whose
+                            quantity to order is above zero and that are not snoozed, i.e. the
+                            same rules the Replenishment report proposes to order.
+                            <strong>Receipts</strong> and <strong>Deliveries</strong> count the
+                            incoming and outgoing transfers that are confirmed but not
+                            validated yet.
+                        </p>
+                    </div>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_stocksense_dashboard" model="ir.actions.act_window">
+        <field name="name">Dashboard</field>
+        <field name="res_model">stocksense.dashboard</field>
+        <field name="view_mode">form</field>
+        <field name="target">current</field>
+    </record>
+
+    <menuitem id="menu_stocksense_dashboard"
+              name="Dashboard"
+              parent="menu_stocksense_root"
+              action="action_stocksense_dashboard"
+              groups="stock.group_stock_user"
+              sequence="10"/>
+</odoo>
