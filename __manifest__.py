@@ -3,7 +3,8 @@
     'name': 'StockSense Core',
     'version': '17.0.1.0.0',
     'category': 'Inventory/Inventory',
-    'summary': 'StockSense core inventory foundations: product SKU, reorder rules and initial stock.',
+    'summary': 'StockSense inventory foundations: product SKU, reorder rules, '
+               'initial stock and stock operations.',
     'description': """
 StockSense Core
 ===============
@@ -24,6 +25,14 @@ Features
   reachable from the Inventory app.
 * Access rights built on the standard Odoo stock groups: **Inventory
   Managers** (full rights) and **Warehouse Staff** (read/write, no deletion).
+* **Stock Operations** (merged from *StockSense - Stock Operations*): the three
+  daily warehouse operations on ``stock.picking`` - receipts, deliveries and
+  internal transfers - exposed through one uniform list with operation
+  classification, simplified status badges (Draft / Waiting / Ready / Done /
+  Cancelled), demand and processed quantities, a progress indicator and
+  lateness flags, plus a dedicated menu under Inventory and a
+  ``get_operation_state_summary`` helper for dashboards. The native transfer
+  workflow is reused untouched.
 
 Technical notes
 ---------------
@@ -44,6 +53,7 @@ Technical notes
         'security/stocksense_security.xml',
         'views/product_views.xml',
         'views/reorder_rule_views.xml',
+        'views/stock_operation_views.xml',
         'views/menu.xml',
     ],
     'application': True,
