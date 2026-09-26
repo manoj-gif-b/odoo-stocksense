@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ==================================================================
+         StockSense application menu.
+
+         This file is the single source of truth for the menus of the module,
+         therefore it has to be loaded last: the menu items reference the
+         actions defined in views/product_views.xml and
+         views/reorder_rule_views.xml.
+
+         The top level menu is an application (it carries an icon and is listed
+         in the Apps switcher). It also has an action, so opening the app lands
+         directly on the Products list, which is its first sub-menu.
+         ================================================================== -->
+
+    <menuitem id="menu_stocksense_root"
+        name="StockSense"
+        web_icon="stock,static/description/icon.png"
+        action="action_stocksense_product_template"
+        sequence="85"
+        groups="stock.group_stock_user"/>
+
+    <menuitem id="menu_stocksense_product_template"
+        name="Products"
+        parent="menu_stocksense_root"
+        action="action_stocksense_product_template"
+        sequence="10"
+        groups="stock.group_stock_user"/>
+
+    <menuitem id="menu_stocksense_orderpoint"
+        name="Reordering Rules"
+        parent="menu_stocksense_root"
+        action="action_stocksense_orderpoint"
+        sequence="15"
+        groups="stock.group_stock_user"/>
+
+    <menuitem id="menu_stocksense_reorder_rule"
+        name="Reorder Rules"
+        parent="menu_stocksense_root"
+        action="action_stocksense_reorder_rule"
+        sequence="20"
+        groups="stock.group_stock_user"/>
+
+    <menuitem id="menu_stocksense_product_category"
+        name="Product Categories"
+        parent="menu_stocksense_root"
+        action="action_stocksense_product_category"
+        sequence="30"
+        groups="stock.group_stock_manager"/>
+
+</odoo>
