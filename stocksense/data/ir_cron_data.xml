@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Part of StockSense. See LICENSE file for full copyright and licensing details. -->
+<odoo>
+    <data noupdate="1">
+        <!-- Low Stock Alerts.
+
+             In Odoo 17 an ir.cron is a thin wrapper delegating to an
+             ir.actions.server, so the job is described with model_id + state +
+             code. The magic variable `model` is the stocksense.dashboard model
+             in the environment of `user_id`.
+
+             Running as base.user_root on purpose: the job scans the reordering
+             rules of every company before emailing each company's Inventory
+             managers, which a company-restricted user could not do.
+
+             noupdate="1" so that deactivating the job from the UI survives a
+             module upgrade. -->
+        <record id="ir_cron_low_stock_alerts" model="ir.cron">
+            <field name="name">StockSense: Low Stock Alerts</field>
+            <field name="model_id" ref="model_stocksense_dashboard"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_low_stock_alerts()</field>
+            <field name="user_id" ref="base.user_root"/>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="numbercall">-1</field>
+            <field name="priority">5</field>
+        </record>
+    </data>
+</odoo>
