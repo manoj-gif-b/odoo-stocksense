@@ -51,6 +51,14 @@ Features
     open warning activity per low stock product (durable, deduplicated trail).
     Disable one of the two jobs in *Settings > Technical > Scheduled Actions* if
     a single alerting channel is preferred.
+* **Dynamic filters** (``views/stock_search_views.xml``): the stock document
+  lists - receipts, deliveries, internal transfers and inventory adjustments -
+  are filtered by *Document Type* (Receipts / Deliveries / Internal /
+  Adjustments), by *Status* (Draft / Waiting / Ready / Done / Canceled) and
+  grouped by *Warehouse*, *Location* and *Product Category*.
+* **Profile menu** (``views/profile_menu.xml``): a *My Account* entry in the
+  backend sidebar with the *My Profile* (user preferences) and *Logout*
+  shortcuts, available to every internal user.
 
 Technical notes
 ---------------
@@ -79,6 +87,8 @@ Technical notes
         'views/stock_operation_views.xml',
         'views/stock_adjustment_views.xml',
         'views/dashboard_views.xml',
+        'views/stock_search_views.xml',
+        'views/profile_menu.xml',
         'views/menu.xml',
     ],
     'application': True,

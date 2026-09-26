@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Part of StockSense. See LICENSE file for full copyright and licensing details. -->
+<odoo>
+
+    <!-- ==================================================================
+         Profile menu of the backend sidebar.
+
+         Adds a "My Account" entry to the Odoo backend sidebar holding the two
+         shortcuts a warehouse user needs:
+
+         * **My Profile** -> the standard user preferences form of the
+           connected user (``base.action_res_users_my``, the very action the
+           top right user menu opens), resolved on their own record;
+         * **Logout** -> the ``/web/session/logout`` route, which clears the
+           session exactly like the "Log out" entry of the user menu.
+
+         The application menus of StockSense stay declared in views/menu.xml,
+         which is loaded last; the account menu is the only menu owned by this
+         file, and it is visible to every internal user.
+
+         Note: on Odoo 17 the top right avatar menu is filled by the
+         ``user_menuitems`` JavaScript registry and therefore cannot be
+         extended from XML. The backend sidebar menu below is the XML way to
+         publish the two shortcuts to the users.
+         ================================================================== -->
+
+    <!-- My Profile: open the preferences of the *connected* user. A server
+         action is required because the preferences action of the core carries
+         no res_id: it has to be resolved per user, at click time. -->
+    <record id="action_stocksense_my_profile" model="ir.actions.server">
+        <field name="name">My Profile</field>
+        <field name="model_id" ref="base.model_res_users"/>
+        <field name="state">code</field>
+        <field name="groups_id" eval="[(4, ref('base.group_user'))]"/>
+        <field name="code">
+action = model.env['ir.actions.act_window']._for_xml_id('base.action_res_users_my')
+action['res_id'] = model.env.uid
+        </field>
+    </record>
+
+    <record id="action_stocksense_logout" model="ir.actions.act_url">
+        <field name="name">Logout</field>
+        <field name="url">/web/session/logout</field>
+        <field name="target">self</field>
+    </record>
+
+    <!-- ================================================================== -->
+    <!-- Profile menu: StockSense > My Account                               -->
+    <!-- ================================================================== -->
+    <menuitem id="menu_stocksense_profile_root"
+              name="My Account"
+              web_icon="stock,static/description/icon.png"
+              action="action_stocksense_my_profile"
+              sequence="95"
+              groups="base.group_user"/>
+
+    <menuitem id="menu_stocksense_my_profile"
+              name="My Profile"
+              parent="menu_stocksense_profile_root"
+              action="action_stocksense_my_profile"
+              sequence="10"
+              groups="base.group_user"/>
+
+    <menuitem id="menu_stocksense_logout"
+              name="Logout"
+              parent="menu_stocksense_profile_root"
+              action="action_stocksense_logout"
+              sequence="20"
+              groups="base.group_user"/>
+
+</odoo>
