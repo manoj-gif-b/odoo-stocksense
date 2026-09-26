@@ -93,6 +93,10 @@
                 <field name="ss_reorder_point" optional="show"/>
                 <field name="ss_reorder_max_qty" optional="hide"/>
                 <field name="qty_available" optional="show" groups="stock.group_stock_user"/>
+                <field name="stock_status" optional="show"
+                    decoration-danger="stock_status == 'Out of Stock'"
+                    decoration-warning="stock_status == 'Low Stock'"
+                    decoration-success="stock_status == 'In Stock'"/>
                 <field name="uom_id" optional="show" readonly="1" groups="uom.group_uom"/>
                 <field name="detailed_type" optional="hide" readonly="1"/>
                 <field name="company_id" optional="hide" groups="base.group_multi_company"

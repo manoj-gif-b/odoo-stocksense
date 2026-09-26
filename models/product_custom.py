@@ -169,6 +169,14 @@ class ProductTemplate(models.Model):
     ss_initial_stock_applied = fields.Boolean(
         string='Initial Stock Applied', default=False, copy=False, readonly=True,
         help="Set once the initial stock has been applied on the stock location.")
+    stock_status = fields.Char(
+        string='Stock Status', compute='_compute_stock_status',
+        help="Readable stock status of the product, computed from the quantity "
+             "on hand:\n"
+             "- Out of Stock: nothing on hand,\n"
+             "- Low Stock: quantity on hand below or equal to the reorder point,\n"
+             "- In Stock: quantity on hand above the reorder point.\n"
+             "A product without any reorder rule is never flagged as low stock.")
 
     # ------------------------------------------------------------------
     # Compute
@@ -185,6 +193,18 @@ class ProductTemplate(models.Model):
             rules = template.ss_reorder_rule_ids.filtered('active')
             template.ss_reorder_point = min(rules.mapped('min_qty')) if rules else 0.0
             template.ss_reorder_max_qty = max(rules.mapped('max_qty')) if rules else 0.0
+
+    @api.depends('qty_available', 'ss_reorder_point')
+    def _compute_stock_status(self):
+        """Flag the products that are out of stock or below their reorder point."""
+        for template in self:
+            if template.qty_available <= 0.0:
+                template.stock_status = 'Out of Stock'
+            elif (template.ss_reorder_point
+                    and template.qty_available <= template.ss_reorder_point):
+                template.stock_status = 'Low Stock'
+            else:
+                template.stock_status = 'In Stock'
 
     # ------------------------------------------------------------------
     # Constraints
