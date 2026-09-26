@@ -52,8 +52,11 @@ The ``stock.move`` extension at the bottom of this file only feeds the
 StockSense *Move History* ledger (operation type and signed stock impact).
 """
 
+from collections import defaultdict
+
 from odoo import _, api, fields, models
-from odoo.exceptions import ValidationError
+from odoo.exceptions import UserError, ValidationError
+from odoo.tools.float_utils import float_compare
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -438,6 +441,108 @@ class StockPicking(models.Model):
                             LOCATION_USAGE_LABELS.get(
                                 location.usage, location.usage),
                             location.display_name))
+
+    # ------------------------------------------------------------------
+    # Action overrides / validations
+    # ------------------------------------------------------------------
+    def button_validate(self):
+        """Prevent validating a delivery that would result in negative stock.
+
+        Overrides ``stock.picking.button_validate`` to enforce strict non-negative
+        inventory on outgoing operations (Deliveries). If the quantity being
+        delivered from an internal/transit location exceeds the physical on-hand
+        stock available at that location, validation is halted with a clear
+        ``UserError`` detailing the shortfall.
+
+        Dual Odoo 16.0 / 17.0 compatible:
+        * Reads executed quantities using ``get_done_quantity_field``
+          (``quantity`` in 17.0, ``quantity_done`` in 16.0);
+        * Compares against live ``stock.quant`` physical on-hand quantity;
+        * Employs standard ``float_compare`` with product UoM rounding.
+        """
+        self._check_delivery_negative_stock()
+        return super().button_validate()
+
+    def _check_delivery_negative_stock(self):
+        """Verify that outgoing moves do not cause negative stock."""
+        Quant = self.env['stock.quant']
+        Move = self.env['stock.move']
+        done_field = get_done_quantity_field(Move)
+
+        for picking in self:
+            # Only validate outgoing operations (deliveries)
+            if picking.picking_type_id.code != 'outgoing':
+                continue
+
+            # Group requested delivery quantities by (product, source_location)
+            # using the product's reference UoM to ensure precise comparison.
+            delivery_demand = defaultdict(float)
+            product_map = {}
+            location_map = {}
+
+            for move in picking.move_ids.filtered(lambda m: m.state not in ('done', 'cancel')):
+                # Only products leaving internal or transit stock consume inventory
+                if move.location_id.usage not in INTERNAL_LOCATION_USAGES:
+                    continue
+
+                product = move.product_id
+                # Non-storable goods (services, consumables) do not hold physical stock
+                if product.type != 'product':
+                    continue
+
+                # Use the processed/done quantity if entered, fallback to demand
+                qty = move[done_field] if move[done_field] else move.product_uom_qty
+                if float_compare(qty, 0.0, precision_rounding=move.product_uom.rounding) <= 0:
+                    continue
+
+                # Convert to product base UoM for consistent aggregation
+                qty_in_product_uom = move.product_uom._compute_quantity(qty, product.uom_id)
+
+                key = (product.id, move.location_id.id)
+                delivery_demand[key] += qty_in_product_uom
+                product_map[product.id] = product
+                location_map[move.location_id.id] = move.location_id
+
+            if not delivery_demand:
+                continue
+
+            # Check each product & location combination against live stock on hand
+            shortfalls = []
+            for (prod_id, loc_id), demand_qty in delivery_demand.items():
+                product = product_map[prod_id]
+                location = location_map[loc_id]
+                rounding = product.uom_id.rounding
+
+                # Search live physical quants in the source location hierarchy
+                quants = Quant.search([
+                    ('product_id', '=', prod_id),
+                    ('location_id', 'child_of', loc_id),
+                ])
+                on_hand_qty = sum(quants.mapped('quantity'))
+
+                remaining_qty = on_hand_qty - demand_qty
+                if float_compare(remaining_qty, 0.0, precision_rounding=rounding) < 0:
+                    shortfalls.append(_(
+                        "- %(product)s: Delivering %(demand)s %(uom)s from %(location)s "
+                        "exceeds on-hand stock (Available: %(on_hand)s %(uom)s, Short: %(short)s %(uom)s)"
+                    ) % {
+                        'product': product.display_name,
+                        'demand': f"{demand_qty:.2f}".rstrip('0').rstrip('.'),
+                        'on_hand': f"{on_hand_qty:.2f}".rstrip('0').rstrip('.'),
+                        'short': f"{(demand_qty - on_hand_qty):.2f}".rstrip('0').rstrip('.'),
+                        'uom': product.uom_id.name,
+                        'location': location.display_name,
+                    })
+
+            if shortfalls:
+                raise UserError(_(
+                    "Cannot validate Delivery '%(picking)s': Validating this operation would "
+                    "result in negative stock for the following product(s):\n\n%(shortfalls)s\n\n"
+                    "Please replenish inventory or adjust the delivered quantity."
+                ) % {
+                    'picking': picking.display_name,
+                    'shortfalls': '\n'.join(shortfalls),
+                })
 
     # ------------------------------------------------------------------
     # Reporting helper
