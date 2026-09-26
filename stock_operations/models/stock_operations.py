@@ -22,9 +22,29 @@ Compatibility
 Written against Odoo 17.0: uses ``stock.move.quantity`` (renamed from
 ``quantity_done`` in 17.0), ``stock.picking.picking_type_id.code``,
 ``scheduled_date`` / ``date_done`` and the ``_read_group`` ORM API.
+
+Internal transfers
+------------------
+Internal transfers (operations of type ``internal``) only move goods between
+the company's own stock locations: the total quantity on hand must stay
+unchanged. StockSense therefore:
+
+* resolves the warehouse of the source and destination locations
+  (``internal_source_warehouse_id`` / ``internal_dest_warehouse_id``) and
+  flags warehouse to warehouse movements (``internal_is_cross_warehouse``);
+* exposes the live quantity available at the source location
+  (``internal_source_available_qty``);
+* computes a signed ``operation_stock_impact`` (also available per move on
+  ``stock.move``), which is exactly zero when stock only moves between two
+  stock locations, and refuses operations mixing vendor/customer locations
+  with an internal transfer.
+
+The ``stock.move`` extension at the bottom of this file only feeds the
+StockSense *Move History* ledger (operation type and signed stock impact).
 """
 
-from odoo import api, fields, models
+from odoo import _, api, fields, models
+from odoo.exceptions import ValidationError
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -67,9 +87,30 @@ PICKING_STATE_TO_OPERATION_STATE = {
 
 _SECONDS_PER_DAY = 86400.0
 
+#: Location usages holding the company's own stock. A movement changes the
+#: quantity on hand only when exactly one of its two locations is in this set,
+#: which is what makes an internal transfer impact-free.
+INTERNAL_LOCATION_USAGES = ('internal', 'transit')
+
+#: Human labels used in the internal transfer validation messages.
+LOCATION_USAGE_LABELS = {
+    'supplier': 'vendor',
+    'customer': 'customer',
+    'inventory': 'inventory loss',
+    'production': 'production',
+    'view': 'view',
+    'internal': 'internal',
+    'transit': 'transit',
+}
+
 
 class StockPicking(models.Model):
-    """Add the StockSense operation abstraction on top of pickings."""
+    """Add the StockSense operation abstraction on top of pickings.
+
+    Covers the three daily operations (receipts, deliveries and internal
+    transfers) and adds the helpers required to run internal transfers
+    safely, i.e. without ever changing the total quantity on hand.
+    """
 
     _inherit = 'stock.picking'
 
@@ -170,6 +211,51 @@ class StockPicking(models.Model):
     )
 
     # ------------------------------------------------------------------
+    # Internal transfers
+    # ------------------------------------------------------------------
+    internal_source_warehouse_id = fields.Many2one(
+        'stock.warehouse',
+        string='Source Warehouse',
+        compute='_compute_internal_warehouses',
+        store=True,
+        help="Warehouse the source location belongs to. Empty for locations "
+             "that are not part of a warehouse, such as vendor or customer "
+             "locations.",
+    )
+    internal_dest_warehouse_id = fields.Many2one(
+        'stock.warehouse',
+        string='Destination Warehouse',
+        compute='_compute_internal_warehouses',
+        store=True,
+        help="Warehouse the destination location belongs to.",
+    )
+    internal_is_cross_warehouse = fields.Boolean(
+        string='Warehouse to Warehouse',
+        compute='_compute_internal_warehouses',
+        store=True,
+        help="Set when the source and the destination locations belong to two "
+             "different warehouses.",
+    )
+    internal_source_available_qty = fields.Float(
+        string='Available at Source',
+        compute='_compute_internal_source_availability',
+        digits='Product Unit of Measure',
+        help="Quantity of the transferred products currently available (on "
+             "hand minus reserved) at the source location and its "
+             "sub-locations. Read live from the quants.",
+    )
+    operation_stock_impact = fields.Float(
+        string='Stock Impact',
+        compute='_compute_operation_stock_impact',
+        store=True,
+        digits='Product Unit of Measure',
+        help="Signed effect of the operation on the quantity on hand: "
+             "positive when goods enter the stock (receipt), negative when "
+             "they leave it (delivery) and zero for an internal transfer, "
+             "which only moves goods between two stock locations.",
+    )
+
+    # ------------------------------------------------------------------
     # Computes
     # ------------------------------------------------------------------
     @api.depends('picking_type_id.code')
@@ -229,6 +315,98 @@ class StockPicking(models.Model):
                 if delay_seconds > 0 else 0)
             picking.operation_is_late = delay_seconds > 0
 
+    @api.depends('location_id', 'location_dest_id')
+    def _compute_internal_warehouses(self):
+        """Resolve the warehouse of the source and destination locations.
+
+        A warehouse owns every location below its view location, so the
+        lookup is done with a single ``parent_of`` search for the whole
+        recordset instead of one query per record.
+        """
+        Warehouse = self.env['stock.warehouse']
+        locations = self.mapped('location_id') | self.mapped('location_dest_id')
+        warehouse_by_location = {}
+        if locations:
+            warehouses = Warehouse.search(
+                [('view_location_id', 'parent_of', locations.ids)])
+            for warehouse in warehouses:
+                root_path = warehouse.view_location_id.parent_path or ''
+                for location in locations:
+                    location_path = location.parent_path or ''
+                    if not root_path or not location_path.startswith(root_path):
+                        continue
+                    known = warehouse_by_location.get(location.id)
+                    # deepest matching view location wins for nested setups
+                    if not known or len(root_path) > len(
+                            known.view_location_id.parent_path or ''):
+                        warehouse_by_location[location.id] = warehouse
+        empty = Warehouse.browse()
+        for picking in self:
+            source = warehouse_by_location.get(picking.location_id.id, empty)
+            destination = warehouse_by_location.get(
+                picking.location_dest_id.id, empty)
+            picking.internal_source_warehouse_id = source
+            picking.internal_dest_warehouse_id = destination
+            picking.internal_is_cross_warehouse = bool(
+                source and destination and source != destination)
+
+    @api.depends('location_id', 'move_ids.product_id',
+                 'move_ids.product_uom_qty')
+    def _compute_internal_source_availability(self):
+        """Quantity of the operation's products available at the source."""
+        Quant = self.env['stock.quant']
+        for picking in self:
+            products = picking.move_ids.product_id
+            if not picking.location_id or not products:
+                picking.internal_source_available_qty = 0.0
+                continue
+            quants = Quant.search([
+                ('location_id', 'child_of', picking.location_id.id),
+                ('product_id', 'in', products.ids),
+            ])
+            picking.internal_source_available_qty = (
+                sum(quants.mapped('quantity'))
+                - sum(quants.mapped('reserved_quantity')))
+
+    @api.depends('move_ids.operation_stock_impact')
+    def _compute_operation_stock_impact(self):
+        """Sum the signed impact of the operation's moves.
+
+        The per-move impact (see ``stock.move`` below) is derived from the
+        location types, so an internal transfer between two stock locations
+        always ends up with a zero impact.
+        """
+        for picking in self:
+            picking.operation_stock_impact = sum(
+                picking.move_ids.mapped('operation_stock_impact'))
+
+    @api.constrains('location_id', 'location_dest_id', 'picking_type_id')
+    def _check_internal_transfer_locations(self):
+        """Keep internal transfers inside the company's own stock.
+
+        An internal transfer must move goods from one stock location to a
+        *different* one, without involving vendor or customer locations,
+        otherwise the total quantity on hand would change.
+        """
+        for picking in self:
+            if picking.picking_type_id.code != 'internal':
+                continue
+            if picking.location_id == picking.location_dest_id:
+                raise ValidationError(_(
+                    "The source and destination locations of the internal "
+                    "transfer %s must be different.") % picking.display_name)
+            for location in picking.location_id | picking.location_dest_id:
+                if location.usage in ('supplier', 'customer'):
+                    raise ValidationError(_(
+                        "The internal transfer %s cannot use the %s location "
+                        "%s: an internal transfer only moves stock between "
+                        "stock locations, so it must never change the total "
+                        "quantity on hand.") % (
+                            picking.display_name,
+                            LOCATION_USAGE_LABELS.get(
+                                location.usage, location.usage),
+                            location.display_name))
+
     # ------------------------------------------------------------------
     # Reporting helper
     # ------------------------------------------------------------------
@@ -255,3 +433,50 @@ class StockPicking(models.Model):
             if operation_state in summary:
                 summary[operation_state] += count
         return summary
+
+
+class StockMove(models.Model):
+    """Ledger fields added to stock moves for the Move History views.
+
+    Kept on ``stock.move`` so the ledger can be searched, filtered and
+    grouped by StockSense values without any Python helper.
+    """
+
+    _inherit = 'stock.move'
+
+    operation_type = fields.Selection(
+        selection=OPERATION_TYPES,
+        string='Operation Type',
+        related='picking_id.operation_type',
+        store=True,
+        index=True,
+        help="StockSense category of the operation this move belongs to: "
+             "Receipt, Delivery or Internal Transfer.",
+    )
+    operation_stock_impact = fields.Float(
+        string='Stock Impact',
+        compute='_compute_operation_stock_impact',
+        store=True,
+        digits='Product Unit of Measure',
+        help="Signed effect of the movement on the quantity on hand: "
+             "negative when the goods leave the stock, positive when they "
+             "enter it and zero when the goods only move from one stock "
+             "location to another (internal transfers). "
+             "Uses the same logic as the native movement analysis.",
+    )
+
+    @api.depends('location_id.usage', 'location_dest_id.usage', 'quantity')
+    def _compute_operation_stock_impact(self):
+        """Derive the signed stock impact from the nature of the locations."""
+        for move in self:
+            source_in_stock = (
+                move.location_id.usage in INTERNAL_LOCATION_USAGES)
+            destination_in_stock = (
+                move.location_dest_id.usage in INTERNAL_LOCATION_USAGES)
+            if source_in_stock and not destination_in_stock:
+                move.operation_stock_impact = -move.quantity
+            elif destination_in_stock and not source_in_stock:
+                move.operation_stock_impact = move.quantity
+            else:
+                # both sides hold stock (internal transfer) or neither does
+                move.operation_stock_impact = 0.0
