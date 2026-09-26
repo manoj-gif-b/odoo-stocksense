@@ -1,0 +1,304 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ==================================================================
+         Reorder rules (stocksense.reorder.rule)
+         ================================================================== -->
+    <record id="view_stocksense_reorder_rule_tree" model="ir.ui.view">
+        <field name="name">stocksense.reorder.rule.list</field>
+        <field name="model">stocksense.reorder.rule</field>
+        <field name="arch" type="xml">
+            <tree string="Reorder Rules" sample="1">
+                <field name="sequence" widget="handle"/>
+                <field name="product_tmpl_id" string="Product"/>
+                <field name="warehouse_id" optional="show" options="{'no_create': True}"/>
+                <field name="location_id" optional="hide" options="{'no_create': True}"/>
+                <field name="min_qty"/>
+                <field name="max_qty"/>
+                <field name="qty_multiple" optional="hide"/>
+                <field name="uom_id" optional="hide" groups="uom.group_uom"/>
+                <field name="trigger" optional="show"/>
+                <field name="active" optional="hide"/>
+                <field name="company_id" optional="hide" groups="base.group_multi_company"
+                    options="{'no_create': True}"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_stocksense_reorder_rule_form" model="ir.ui.view">
+        <field name="name">stocksense.reorder.rule.form</field>
+        <field name="model">stocksense.reorder.rule</field>
+        <field name="arch" type="xml">
+            <form string="Reorder Rule">
+                <sheet>
+                    <div class="oe_title">
+                        <label for="product_tmpl_id" string="Product"/>
+                        <h1><field name="product_tmpl_id" options="{'no_create': True}"/></h1>
+                    </div>
+                    <group>
+                        <group string="Scope" name="ss_scope">
+                            <field name="warehouse_id" options="{'no_create': True}"/>
+                            <field name="location_id" options="{'no_create': True}"/>
+                            <field name="company_id" groups="base.group_multi_company"
+                                options="{'no_create': True}"/>
+                            <field name="sequence"/>
+                        </group>
+                        <group string="Thresholds" name="ss_thresholds">
+                            <field name="trigger"/>
+                            <field name="min_qty"/>
+                            <field name="max_qty"/>
+                            <field name="qty_multiple"/>
+                            <field name="uom_id" groups="uom.group_uom"/>
+                        </group>
+                    </group>
+                    <widget name="web_ribbon" title="Archived" bg_color="text-bg-danger"
+                        invisible="active"/>
+                    <field name="active" invisible="1"/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_stocksense_reorder_rule_search" model="ir.ui.view">
+        <field name="name">stocksense.reorder.rule.search</field>
+        <field name="model">stocksense.reorder.rule</field>
+        <field name="arch" type="xml">
+            <search string="Reorder Rules">
+                <field name="product_tmpl_id" string="Product"/>
+                <field name="warehouse_id"/>
+                <filter name="filter_ss_active" string="Active" domain="[('active', '=', True)]"/>
+                <filter name="filter_ss_archived" string="Archived" domain="[('active', '=', False)]"/>
+                <group expand="0" string="Group By">
+                    <filter name="groupby_ss_product" string="Product"
+                        context="{'group_by': 'product_tmpl_id'}"/>
+                    <filter name="groupby_ss_warehouse" string="Warehouse"
+                        context="{'group_by': 'warehouse_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- ==================================================================
+         Products (product.template)
+         ================================================================== -->
+    <record id="view_stocksense_product_template_tree" model="ir.ui.view">
+        <field name="name">stocksense.product.template.list</field>
+        <field name="model">product.template</field>
+        <field name="arch" type="xml">
+            <tree string="StockSense Products" sample="1">
+                <field name="name" string="Product"/>
+                <field name="ss_sku" string="StockSense SKU" optional="show"/>
+                <field name="default_code" optional="show"/>
+                <field name="categ_id" optional="show"/>
+                <field name="ss_reorder_point" optional="show"/>
+                <field name="ss_reorder_max_qty" optional="hide"/>
+                <field name="qty_available" optional="show" groups="stock.group_stock_user"/>
+                <field name="uom_id" optional="show" readonly="1" groups="uom.group_uom"/>
+                <field name="detailed_type" optional="hide" readonly="1"/>
+                <field name="company_id" optional="hide" groups="base.group_multi_company"
+                    options="{'no_create': True}"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_stocksense_product_template_search" model="ir.ui.view">
+        <field name="name">stocksense.product.template.search</field>
+        <field name="model">product.template</field>
+        <field name="arch" type="xml">
+            <search string="StockSense Products">
+                <field name="name" string="Product"
+                    filter_domain="['|', '|', ('name', 'ilike', self), ('default_code', 'ilike', self), ('ss_sku', '=ilike', self)]"/>
+                <field name="ss_sku" string="StockSense SKU"/>
+                <field name="default_code"/>
+                <field name="categ_id"/>
+                <filter name="filter_ss_storable" string="Storable"
+                    domain="[('detailed_type', '=', 'product')]"/>
+                <filter name="filter_ss_with_rule" string="With Reorder Rules"
+                    domain="[('ss_reorder_rule_ids', '!=', False)]"/>
+                <filter name="filter_ss_archived" string="Archived"
+                    domain="[('active', '=', False)]"/>
+                <group expand="0" string="Group By">
+                    <filter name="groupby_ss_categ" string="Product Category"
+                        context="{'group_by': 'categ_id'}"/>
+                    <filter name="groupby_ss_type" string="Product Type"
+                        context="{'group_by': 'detailed_type'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="view_stocksense_product_template_form" model="ir.ui.view">
+        <field name="name">stocksense.product.template.form</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_form_view"/>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <div name="button_box" position="inside">
+                <button class="oe_stat_button" type="object" icon="fa-cubes"
+                    name="action_ss_open_reorder_rules"
+                    invisible="not ss_reorder_rule_count">
+                    <field name="ss_reorder_rule_count" widget="statinfo"
+                        string="Reorder Rules"/>
+                </button>
+            </div>
+            <xpath expr="//form/sheet/notebook" position="inside">
+                <page string="StockSense" name="stocksense">
+                    <group>
+                        <group string="Identification" name="ss_identification">
+                            <field name="ss_sku" placeholder="e.g. SS-CHAIR-001"/>
+                            <field name="ss_reorder_rule_count" invisible="1"/>
+                        </group>
+                        <group string="Replenishment Summary" name="ss_replenishment">
+                            <field name="ss_reorder_point" readonly="1"/>
+                            <field name="ss_reorder_max_qty" readonly="1"/>
+                        </group>
+                    </group>
+                    <group string="Initial Stock" name="ss_initial_stock_group">
+                        <group>
+                            <field name="ss_initial_stock"/>
+                            <field name="ss_initial_location_id"
+                                options="{'no_create': True}"/>
+                        </group>
+                        <group>
+                            <field name="ss_initial_stock_applied"/>
+                            <button name="action_ss_apply_initial_stock" type="object"
+                                string="Apply Initial Stock" class="btn-primary"
+                                invisible="ss_initial_stock_applied or not ss_initial_stock"/>
+                        </group>
+                    </group>
+                    <field name="ss_reorder_rule_ids" nolabel="1">
+                        <tree editable="bottom">
+                            <field name="sequence" widget="handle"/>
+                            <field name="warehouse_id" options="{'no_create': True}"/>
+                            <field name="min_qty"/>
+                            <field name="max_qty"/>
+                            <field name="qty_multiple"/>
+                            <field name="uom_id" readonly="1" groups="uom.group_uom"/>
+                            <field name="trigger"/>
+                        </tree>
+                        <form>
+                            <sheet>
+                                <group>
+                                    <group>
+                                        <field name="product_tmpl_id"
+                                            options="{'no_create': True}"/>
+                                        <field name="warehouse_id"
+                                            options="{'no_create': True}"/>
+                                        <field name="location_id"
+                                            options="{'no_create': True}"/>
+                                    </group>
+                                    <group>
+                                        <field name="trigger"/>
+                                        <field name="min_qty"/>
+                                        <field name="max_qty"/>
+                                        <field name="qty_multiple"/>
+                                        <field name="uom_id" groups="uom.group_uom"/>
+                                    </group>
+                                </group>
+                            </sheet>
+                        </form>
+                    </field>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- ==================================================================
+         Product categories (product.category)
+         ================================================================== -->
+    <record id="view_stocksense_product_category_tree" model="ir.ui.view">
+        <field name="name">stocksense.product.category.list</field>
+        <field name="model">product.category</field>
+        <field name="arch" type="xml">
+            <tree string="Product Categories">
+                <field name="display_name" string="Product Category"/>
+                <field name="parent_id"/>
+                <field name="ss_default_reorder_point" optional="show"/>
+                <field name="ss_default_reorder_max_qty" optional="show"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_stocksense_product_category_form" model="ir.ui.view">
+        <field name="name">stocksense.product.category.form</field>
+        <field name="model">product.category</field>
+        <field name="inherit_id" ref="product.product_category_form_view"/>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <xpath expr="//group[@name='first']" position="after">
+                <group string="StockSense Defaults" name="ss_defaults">
+                    <group name="ss_default_thresholds">
+                        <field name="ss_default_reorder_point"/>
+                        <field name="ss_default_reorder_max_qty"/>
+                    </group>
+                </group>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- ==================================================================
+         Actions
+         ================================================================== -->
+    <record id="action_stocksense_product_template" model="ir.actions.act_window">
+        <field name="name">StockSense Products</field>
+        <field name="res_model">product.template</field>
+        <field name="view_mode">tree,form</field>
+        <field name="view_id" ref="view_stocksense_product_template_tree"/>
+        <field name="search_view_id" ref="view_stocksense_product_template_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Create your first product
+            </p><p>
+                Products hold the StockSense SKU, the reorder rules and the
+                initial stock used by the replenishment engine.
+            </p>
+        </field>
+    </record>
+
+    <record id="action_stocksense_reorder_rule" model="ir.actions.act_window">
+        <field name="name">Reorder Rules</field>
+        <field name="res_model">stocksense.reorder.rule</field>
+        <field name="view_mode">tree,form</field>
+        <field name="search_view_id" ref="view_stocksense_reorder_rule_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Create your first reorder rule
+            </p><p>
+                A reorder rule defines the reorder point and the maximum quantity
+                to keep for a product, optionally per warehouse.
+            </p>
+        </field>
+    </record>
+
+    <record id="action_stocksense_product_category" model="ir.actions.act_window">
+        <field name="name">StockSense Categories</field>
+        <field name="res_model">product.category</field>
+        <field name="view_mode">tree,form</field>
+        <field name="view_id" ref="view_stocksense_product_category_tree"/>
+        <field name="search_view_id" ref="product.product_category_search_view"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Create your first product category
+            </p><p>
+                Categories group products and define the default StockSense
+                reorder thresholds.
+            </p>
+        </field>
+    </record>
+
+    <!-- ==================================================================
+         Menus
+         ================================================================== -->
+    <menuitem id="menu_stocksense_root" name="StockSense"
+        parent="stock.menu_stock_root" sequence="90" groups="stock.group_stock_user"/>
+    <menuitem id="menu_stocksense_product_template" name="Products"
+        parent="menu_stocksense_root" action="action_stocksense_product_template"
+        sequence="10" groups="stock.group_stock_user"/>
+    <menuitem id="menu_stocksense_reorder_rule" name="Reorder Rules"
+        parent="menu_stocksense_root" action="action_stocksense_reorder_rule"
+        sequence="20" groups="stock.group_stock_user"/>
+    <menuitem id="menu_stocksense_product_category" name="Product Categories"
+        parent="menu_stocksense_root" action="action_stocksense_product_category"
+        sequence="30" groups="stock.group_stock_manager"/>
+
+</odoo>

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Access rights of the StockSense models are granted on the standard stock
+         groups (see security/ir.model.access.csv):
+
+         * Inventory Manager : stock.group_stock_manager  -> full rights
+         * Warehouse Staff   : stock.group_stock_user     -> read / write / create
+         * Other employees   : base.group_user            -> read only
+
+         product.template and product.category rights are already defined by the
+         product and stock modules, they are deliberately not redefined here to
+         avoid duplicated access rules. -->
+
+    <record id="stocksense_reorder_rule_comp_rule" model="ir.rule">
+        <field name="name">StockSense Reorder Rule: multi-company</field>
+        <field name="model_id" ref="model_stocksense_reorder_rule"/>
+        <field name="global" eval="True"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+    </record>
+
+</odoo>
