@@ -10,7 +10,13 @@
 
          product.template and product.category rights are already defined by the
          product and stock modules, they are deliberately not redefined here to
-         avoid duplicated access rules. -->
+         avoid duplicated access rules.
+
+         StockSense also extends the stock module rights on
+         stock.warehouse.orderpoint: the extra row granted to
+         stock.group_stock_user is OR-ed with the read-only rule shipped by
+         stock, so Warehouse Staff can create and update minimum / maximum stock
+         rules (never delete them). -->
 
     <record id="stocksense_reorder_rule_comp_rule" model="ir.rule">
         <field name="name">StockSense Reorder Rule: multi-company</field>

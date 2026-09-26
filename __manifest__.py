@@ -43,6 +43,7 @@ Technical notes
         'security/ir.model.access.csv',
         'security/stocksense_security.xml',
         'views/product_views.xml',
+        'views/reorder_rule_views.xml',
     ],
     'application': True,
     'installable': True,

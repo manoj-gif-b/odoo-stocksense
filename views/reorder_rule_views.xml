@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ==================================================================
+         Reordering rules - min / max stock levels of a product.
+         Native model stock.warehouse.orderpoint, extended by StockSense
+         (models/reorder_rule.py).
+
+         NOTE: this file must be loaded after views/product_views.xml because
+         the menu below is attached to menu_stocksense_root.
+         ================================================================== -->
+
+    <record id="view_stocksense_orderpoint_tree" model="ir.ui.view">
+        <field name="name">stocksense.warehouse.orderpoint.list</field>
+        <field name="model">stock.warehouse.orderpoint</field>
+        <field name="arch" type="xml">
+            <tree string="Reordering Rules" editable="bottom" sample="1"
+                decoration-danger="ss_status == 'out_of_stock'"
+                decoration-warning="ss_status == 'below_min'">
+                <field name="product_id"
+                    context="{'default_detailed_type': 'product'}"/>
+                <field name="ss_sku" optional="show"/>
+                <field name="location_id" options="{'no_create': True}"
+                    groups="stock.group_stock_multi_locations"/>
+                <field name="warehouse_id" optional="hide"
+                    options="{'no_create': True}"
+                    groups="stock.group_stock_multi_warehouses"/>
+                <field name="product_min_qty"/>
+                <field name="product_max_qty"/>
+                <field name="qty_multiple" optional="hide"/>
+                <field name="qty_on_hand"/>
+                <field name="qty_forecast"/>
+                <field name="ss_shortage_qty" optional="hide"/>
+                <field name="ss_status" widget="badge" optional="show"
+                    decoration-info="ss_status == 'ok'"
+                    decoration-warning="ss_status == 'below_min'"
+                    decoration-danger="ss_status == 'out_of_stock'"/>
+                <field name="trigger" optional="hide"/>
+                <field name="active" optional="hide"/>
+                <field name="company_id" optional="hide"
+                    options="{'no_create': True}" groups="base.group_multi_company"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_stocksense_orderpoint_form" model="ir.ui.view">
+        <field name="name">stocksense.warehouse.orderpoint.form</field>
+        <field name="model">stock.warehouse.orderpoint</field>
+        <field name="arch" type="xml">
+            <form string="Reordering Rule">
+                <sheet>
+                    <field name="allowed_location_ids" invisible="1"/>
+                    <field name="active" invisible="1"/>
+                    <widget name="web_ribbon" title="Archived"
+                        bg_color="text-bg-danger" invisible="active"/>
+                    <div class="oe_title">
+                        <label for="product_id" string="Product"/>
+                        <h1><field name="product_id" options="{'no_create': True}"/></h1>
+                    </div>
+                    <group>
+                        <group string="Stock Levels" name="ss_levels">
+                            <field name="product_min_qty"/>
+                            <field name="product_max_qty"/>
+                            <field name="qty_multiple"/>
+                            <field name="product_uom_name" string="Unit"
+                                groups="uom.group_uom"/>
+                        </group>
+                        <group string="Location &amp; Trigger" name="ss_location">
+                            <field name="warehouse_id" options="{'no_create': True}"
+                                groups="stock.group_stock_multi_warehouses"/>
+                            <field name="location_id" options="{'no_create': True}"
+                                domain="[('id', 'in', allowed_location_ids)]"
+                                groups="stock.group_stock_multi_locations"/>
+                            <field name="trigger"/>
+                            <field name="visibility_days"/>
+                            <field name="route_id" options="{'no_create': True}"
+                                groups="stock.group_adv_location"/>
+                            <field name="company_id" options="{'no_create': True}"
+                                groups="base.group_multi_company"/>
+                            <field name="snoozed_until" readonly="1"/>
+                        </group>
+                    </group>
+                    <group string="StockSense" name="ss_group">
+                        <field name="ss_sku" readonly="1"/>
+                        <field name="ss_shortage_qty" readonly="1"/>
+                        <field name="ss_note"
+                            placeholder="Instructions for the warehouse team..."/>
+                    </group>
+                    <notebook>
+                        <page string="Availability" name="ss_availability">
+                            <group>
+                                <group name="ss_availability_qty">
+                                    <field name="qty_on_hand" readonly="1"/>
+                                    <field name="qty_forecast" readonly="1"/>
+                                </group>
+                                <group name="ss_availability_status">
+                                    <field name="ss_status" readonly="1"/>
+                                </group>
+                            </group>
+                            <button name="action_product_forecast_report" type="object"
+                                string="Forecast Report" icon="fa-area-chart"
+                                class="btn-link" invisible="not id"/>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_stocksense_orderpoint_search" model="ir.ui.view">
+        <field name="name">stocksense.warehouse.orderpoint.search</field>
+        <field name="model">stock.warehouse.orderpoint</field>
+        <field name="arch" type="xml">
+            <search string="Reordering Rules">
+                <field name="product_id"/>
+                <field name="ss_sku"/>
+                <field name="product_category_id"/>
+                <field name="location_id"/>
+                <field name="warehouse_id"/>
+                <filter name="filter_ss_auto" string="Automatic"
+                    domain="[('trigger', '=', 'auto')]"/>
+                <filter name="filter_ss_manual" string="Manual"
+                    domain="[('trigger', '=', 'manual')]"/>
+                <filter name="filter_ss_archived" string="Archived"
+                    domain="[('active', '=', False)]"/>
+                <group expand="0" string="Group By">
+                    <filter name="groupby_ss_category" string="Product Category"
+                        context="{'group_by': 'product_category_id'}"/>
+                    <filter name="groupby_ss_warehouse" string="Warehouse"
+                        context="{'group_by': 'warehouse_id'}"/>
+                    <filter name="groupby_ss_location" string="Location"
+                        context="{'group_by': 'location_id'}"/>
+                    <filter name="groupby_ss_trigger" string="Trigger"
+                        context="{'group_by': 'trigger'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Stat button of the product form: the rules of the product. -->
+    <record id="view_stocksense_product_template_form_reorder" model="ir.ui.view">
+        <field name="name">stocksense.product.template.form.reorder</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_form_view"/>
+        <field name="priority">100</field>
+        <field name="arch" type="xml">
+            <div name="button_box" position="inside">
+                <button class="oe_stat_button" type="object" icon="fa-refresh"
+                    name="action_ss_open_orderpoints"
+                    invisible="not ss_orderpoint_count">
+                    <field name="ss_orderpoint_count" widget="statinfo"
+                        string="Reordering Rules"/>
+                </button>
+            </div>
+        </field>
+    </record>
+
+    <record id="action_stocksense_orderpoint" model="ir.actions.act_window">
+        <field name="name">Reordering Rules</field>
+        <field name="res_model">stock.warehouse.orderpoint</field>
+        <field name="view_mode">tree,form</field>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'tree', 'view_id': ref('view_stocksense_orderpoint_tree')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('view_stocksense_orderpoint_form')})]"/>
+        <field name="search_view_id" ref="view_stocksense_orderpoint_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Define your first minimum stock rule
+            </p><p>
+                A reordering rule sets the minimum and maximum stock levels of a
+                product for a location. StockSense highlights the rules that are
+                below their minimum.
+            </p>
+        </field>
+    </record>
+
+    <menuitem id="menu_stocksense_orderpoint" name="Reordering Rules"
+        parent="menu_stocksense_root" action="action_stocksense_orderpoint"
+        sequence="15" groups="stock.group_stock_user"/>
+
+</odoo>
